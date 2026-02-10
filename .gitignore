@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+
+# Build outputs
+dist/
+build/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Test files
+test-rank-fetch.js
+rank-output.txt
+rank-test-output.txt
+
+# User data (database, config)
+nexus_data.sqlite
+config.json
+
+# Electron build
+release/
+*.exe
+*.dmg
+*.AppImage
+
+# Windows reserved filenames
+nul

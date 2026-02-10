@@ -1,0 +1,45 @@
+{
+  "name": "nexus-insights",
+  "version": "1.0.0",
+  "description": "Personal LoL data analysis tool",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "sqlite3": "^5.0.2"
+  },
+  "devDependencies": {
+    "electron": "^40.1.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.nexusinsights.app",
+    "productName": "Nexus Insights",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraFiles": [],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

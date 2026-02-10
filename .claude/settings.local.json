@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e:*)",
+      "Bash(dir /s /b \"c:\\\\Users\\\\anton\\\\OneDrive\\\\Documents\\\\Nexus Insights\")",
+      "Bash(du:*)",
+      "Bash(find:*)",
+      "Read(//c/Users/anton/OneDrive/Documents/Nexus Insights/**)",
+      "Bash(del:*)",
+      "Bash(dir:*)",
+      "Read(//c/**)",
+      "Bash(powershell -Command:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(powershell.exe -Command \"\\(Get-Content ''C:\\\\Users\\\\anton\\\\.claude\\\\projects\\\\c--Users-anton-OneDrive-Documents-Nexus-Insights\\\\c063241f-f788-456d-9dc8-4f30f844a6e7.jsonl''\\)[120]\")",
+      "Bash(powershell.exe -Command \"$line = \\(Get-Content ''C:\\\\Users\\\\anton\\\\.claude\\\\projects\\\\c--Users-anton-OneDrive-Documents-Nexus-Insights\\\\c063241f-f788-456d-9dc8-4f30f844a6e7.jsonl''\\)[121]; $json = $line | ConvertFrom-Json; foreach \\($c in $json.message.content\\) { if \\($c.type -eq ''text''\\) { Write-Output $c.text } }\")",
+      "Bash(powershell.exe -Command \"$line = \\(Get-Content ''C:\\\\Users\\\\anton\\\\.claude\\\\projects\\\\c--Users-anton-OneDrive-Documents-Nexus-Insights\\\\c063241f-f788-456d-9dc8-4f30f844a6e7.jsonl''\\)[122]; $json = $line | ConvertFrom-Json; foreach \\($c in $json.message.content\\) { if \\($c.type -eq ''text''\\) { Write-Output $c.text } }\")",
+      "Bash(powershell.exe -Command \"$line = \\(Get-Content ''C:\\\\Users\\\\anton\\\\.claude\\\\projects\\\\c--Users-anton-OneDrive-Documents-Nexus-Insights\\\\c063241f-f788-456d-9dc8-4f30f844a6e7.jsonl''\\)[123]; $json = $line | ConvertFrom-Json; foreach \\($c in $json.message.content\\) { if \\($c.type -eq ''text''\\) { Write-Output $c.text } }\")",
+      "Bash(powershell.exe -Command:*)",
+      "Bash(powershell.exe -NoProfile -Command \"$line = \\(Get-Content ''C:\\\\Users\\\\anton\\\\.claude\\\\projects\\\\c--Users-anton-OneDrive-Documents-Nexus-Insights\\\\c063241f-f788-456d-9dc8-4f30f844a6e7.jsonl''\\)[121]; $json = $line | ConvertFrom-Json; $json.message.content.Count\")",
+      "Bash(powershell.exe:*)"
+    ]
+  }
+}

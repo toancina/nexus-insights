@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Insights</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/app.css">
+    <link rel="stylesheet" href="styles/toast.css">
+</head>
+
+<body>
+    <!-- Background orbs removed -->
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-spacer"></div>
+            <div class="logo">
+                <span class="logo-text">Nexus Insights</span>
+            </div>
+            <button class="settings-btn" onclick="openSettings()" title="Settings">
+                ⚙️
+            </button>
+        </header>
+
+        <!-- Main Card -->
+        <div class="main-card">
+            <!-- Input Group -->
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <label class="input-label" for="gameName">Summoner Name</label>
+                    <input type="text" id="gameName" class="input-field" placeholder="Name">
+                </div>
+                <div class="input-separator">#</div>
+                <div class="input-wrapper tag-input">
+                    <label class="input-label" for="tagLine">Tag</label>
+                    <input type="text" id="tagLine" class="input-field" placeholder="Tag">
+                </div>
+
+                <!-- Sync Button -->
+                <button id="syncBtn" class="sync-btn" onclick="handleSync()">
+                    <span class="btn-icon">&#8635;</span>
+                    <span class="btn-text">Sync Matches</span>
+                </button>
+            </div>
+
+            <!-- Toast Notification -->
+            <div class="toast-notification" id="toastNotification">
+                <div class="toast-content">
+                    <div class="toast-title" id="toastTitle">Ready</div>
+                    <div class="toast-message" id="toastMessage"></div>
+                </div>
+                <div class="toast-close" onclick="hideToast()">×</div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-header">
+                    <span class="progress-label">Syncing matches...</span>
+                    <span class="progress-count" id="progressCount">0 / 0</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill animated" id="progressFill"></div>
+                </div>
+            </div>
+
+            <!-- Unified Stats Row -->
+            <div class="unified-stats-section" id="unifiedStatsSection" style="display: none;">
+                <div class="unified-stats-grid">
+                    <!-- Ranked Solo/Duo -->
+                    <div class="unified-stat-card ranked" id="rankedSoloCard">
+                        <img src="assets/ranks/emblem-iron.png" alt="Rank" class="rank-emblem" id="soloRankIcon">
+                        <div class="unified-stat-info">
+                            <div class="unified-stat-label">Ranked Solo/Duo</div>
+                            <div class="rank-display" id="soloRankText">Unranked</div>
+                            <div class="unified-stat-value"><span id="soloWins">0</span>W - <span
+                                    id="soloLosses">0</span>L (<span id="soloWinRate">0%</span>)</div>
+                        </div>
+                    </div>
+
+                    <!-- Ranked Flex -->
+                    <div class="unified-stat-card ranked" id="rankedFlexCard">
+                        <img src="assets/ranks/emblem-iron.png" alt="Rank" class="rank-emblem" id="flexRankIcon">
+                        <div class="unified-stat-info">
+                            <div class="unified-stat-label">Ranked Flex</div>
+                            <div class="rank-display" id="flexRankText">Unranked</div>
+                            <div class="unified-stat-value"><span id="flexWins">0</span>W - <span
+                                    id="flexLosses">0</span>L (<span id="flexWinRate">0%</span>)</div>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="stat-divider"></div>
+
+                    <!-- Total Matches -->
+                    <div class="unified-stat-card">
+                        <div class="unified-stat-value" id="matchCount">0</div>
+                        <div class="unified-stat-label">Total Matches</div>
+                    </div>
+
+                    <!-- Win Rate -->
+                    <div class="unified-stat-card">
+                        <div class="unified-stat-value" id="winRate">0%</div>
+                        <div class="unified-stat-rank" id="winRateRank"></div>
+                        <div class="unified-stat-label">Win Rate</div>
+                    </div>
+
+                    <!-- Avg KDA -->
+                    <div class="unified-stat-card">
+                        <div class="unified-stat-value" id="avgKda">0.0</div>
+                        <div class="unified-stat-rank" id="avgKdaRank"></div>
+                        <div class="unified-stat-label">Avg KDA</div>
+                    </div>
+
+                    <!-- Avg KP% -->
+                    <div class="unified-stat-card">
+                        <div class="unified-stat-value" id="avgKp">0%</div>
+                        <div class="unified-stat-rank" id="avgKpRank"></div>
+                        <div class="unified-stat-label">Avg KP%</div>
+                    </div>
+
+                    <!-- Avg CS/M -->
+                    <div class="unified-stat-card">
+                        <div class="unified-stat-value" id="avgCsm">0.0</div>
+                        <div class="unified-stat-rank" id="avgCsmRank"></div>
+                        <div class="unified-stat-label">Avg CS/M</div>
+                    </div>
+
+                    <!-- Avg CS -->
+                    <div class="unified-stat-card">
+                        <div class="unified-stat-value" id="avgCs">0</div>
+                        <div class="unified-stat-rank" id="avgCsRank"></div>
+                        <div class="unified-stat-label">Avg CS</div>
+                    </div>
+
+                    <!-- Avg DMG -->
+                    <div class="unified-stat-card">
+                        <div class="unified-stat-value" id="avgDmg">0</div>
+                        <div class="unified-stat-rank" id="avgDmgRank"></div>
+                        <div class="unified-stat-label">Avg DMG</div>
+                    </div>
+                </div>
+
+                <!-- Advanced Stats Row -->
+                <div class="unified-stats-grid advanced-stats-row">
+                    <div class="unified-stat-card has-trend">
+                        <div class="stat-trend-indicator" id="avgCsDiff15Trend"></div>
+                        <div class="unified-stat-value" id="avgCsDiff15">--</div>
+                        <div class="unified-stat-rank insight-label" id="avgCsDiff15Insight"></div>
+                        <div class="unified-stat-label insight-stat-label" id="avgCsDiff15Label">CSD@15</div>
+                    </div>
+                    <div class="unified-stat-card has-trend">
+                        <div class="stat-trend-indicator" id="avgGoldDiff15Trend"></div>
+                        <div class="unified-stat-value" id="avgGoldDiff15">--</div>
+                        <div class="unified-stat-rank insight-label" id="avgGoldDiff15Insight"></div>
+                        <div class="unified-stat-label insight-stat-label" id="avgGoldDiff15Label">GD@15</div>
+                    </div>
+                    <div class="unified-stat-card has-trend">
+                        <div class="stat-trend-indicator" id="avgXpDiff15Trend"></div>
+                        <div class="unified-stat-value" id="avgXpDiff15">--</div>
+                        <div class="unified-stat-rank insight-label" id="avgXpDiff15Insight"></div>
+                        <div class="unified-stat-label insight-stat-label" id="avgXpDiff15Label">XPD@15</div>
+                    </div>
+                    <div class="unified-stat-card has-trend">
+                        <div class="stat-trend-indicator" id="firstBloodRateTrend"></div>
+                        <div class="unified-stat-value" id="firstBloodRate">--</div>
+                        <div class="unified-stat-rank insight-label" id="firstBloodRateInsight"></div>
+                        <div class="unified-stat-label insight-stat-label" id="firstBloodRateLabel">First Blood %</div>
+                    </div>
+                    <div class="unified-stat-card has-trend">
+                        <div class="stat-trend-indicator" id="avgDmgGoldRatioTrend"></div>
+                        <div class="unified-stat-value" id="avgDmgGoldRatio">--</div>
+                        <div class="unified-stat-rank insight-label" id="avgDmgGoldRatioInsight"></div>
+                        <div class="unified-stat-label insight-stat-label" id="avgDmgGoldRatioLabel">Dmg/Gold</div>
+                    </div>
+                    <div class="unified-stat-card has-trend">
+                        <div class="stat-trend-indicator" id="avgIsolatedDeathsTrend"></div>
+                        <div class="unified-stat-value" id="avgIsolatedDeaths">--</div>
+                        <div class="unified-stat-rank insight-label" id="avgIsolatedDeathsInsight"></div>
+                        <div class="unified-stat-label insight-stat-label" id="avgIsolatedDeathsLabel">Isolated Deaths</div>
+                    </div>
+                    <div class="unified-stat-card has-trend">
+                        <div class="stat-trend-indicator" id="avgObjectiveRateTrend"></div>
+                        <div class="unified-stat-value" id="avgObjectiveRate">--</div>
+                        <div class="unified-stat-rank insight-label" id="avgObjectiveRateInsight"></div>
+                        <div class="unified-stat-label insight-stat-label" id="avgObjectiveRateLabel">Objective %</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Match History -->
+            <div class="match-history" id="matchHistory" style="display: none;">
+                <div class="section-header">
+                    <h3 class="section-title">Match History <span class="match-count-badge" id="matchCountBadge">0 matches</span></h3>
+                </div>
+
+                <!-- Filter Section -->
+                <div class="filter-section">
+                    <div class="filter-label">Game Modes:</div>
+                    <div class="filter-options">
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-all" checked onchange="toggleAllFilters()">
+                            <span>All</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="420" checked
+                                onchange="applyFilters()">
+                            <span>Ranked Solo/Duo</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="440" checked
+                                onchange="applyFilters()">
+                            <span>Ranked Flex</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="400,430,480,490,700" checked
+                                onchange="applyFilters()">
+                            <span>Normal</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="450,720,2400" checked
+                                onchange="applyFilters()">
+                            <span>ARAM</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="1700,1710" checked
+                                onchange="applyFilters()">
+                            <span>Arena</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="900,1010,1900" checked
+                                onchange="applyFilters()">
+                            <span>URF</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="830,840,850,870,880,890" checked
+                                onchange="applyFilters()">
+                            <span>Co-op vs AI</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="1020,1300,1400,1810,1820,1830,1840,2300,0" checked
+                                onchange="applyFilters()">
+                            <span>Other</span>
+                        </label>
+                        <button class="filter-clear-btn" onclick="clearGameModeFilters()" title="Clear all game modes">Clear</button>
+                    </div>
+                    <div class="champ-filter-wrapper">
+                        <select id="champFilter" onchange="applyFilters()">
+                            <option value="">All Champions</option>
+                            <option value="__none__">None (Clear Filter)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="match-list" id="matchList">
+                    <!-- Matches will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p class="footer-text">
+                Powered by <a href="https://developer.riotgames.com/" class="footer-link" target="_blank">Riot Games
+                    API</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Setup Modal (First-time setup / Settings) -->
+    <div class="modal-overlay" id="setupModal">
+        <div class="modal-content setup-modal">
+            <button class="modal-close setup-close" onclick="hideSetupModal()">&times;</button>
+            <div class="setup-header">
+                <h2 class="setup-title">Welcome to Nexus Insights</h2>
+                <p class="setup-subtitle">Enter your details to get started</p>
+            </div>
+            <div class="setup-body">
+                <div class="setup-field">
+                    <label class="setup-label" for="setupApiKey">Riot API Key</label>
+                    <input type="password" id="setupApiKey" class="setup-input" placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                    <p class="setup-hint">Get your API key from <a href="#" onclick="require('electron').shell.openExternal('https://developer.riotgames.com'); return false;">developer.riotgames.com</a></p>
+                </div>
+                <div class="setup-row">
+                    <div class="setup-field">
+                        <label class="setup-label" for="setupGameName">Summoner Name</label>
+                        <input type="text" id="setupGameName" class="setup-input" placeholder="YourName">
+                    </div>
+                    <div class="setup-field setup-tag">
+                        <label class="setup-label" for="setupTagLine">Tag</label>
+                        <input type="text" id="setupTagLine" class="setup-input" placeholder="EUW">
+                    </div>
+                </div>
+                <div class="setup-row">
+                    <div class="setup-field">
+                        <label class="setup-label" for="setupRegion">Region</label>
+                        <select id="setupRegion" class="setup-input">
+                            <option value="europe">Europe</option>
+                            <option value="americas">Americas</option>
+                            <option value="asia">Asia</option>
+                        </select>
+                    </div>
+                    <div class="setup-field">
+                        <label class="setup-label" for="setupPlatform">Platform</label>
+                        <select id="setupPlatform" class="setup-input">
+                            <option value="euw1">EUW</option>
+                            <option value="eun1">EUNE</option>
+                            <option value="na1">NA</option>
+                            <option value="kr">KR</option>
+                            <option value="br1">BR</option>
+                            <option value="la1">LAN</option>
+                            <option value="la2">LAS</option>
+                            <option value="oc1">OCE</option>
+                            <option value="tr1">TR</option>
+                            <option value="ru">RU</option>
+                            <option value="jp1">JP</option>
+                            <option value="ph2">PH</option>
+                            <option value="sg2">SG</option>
+                            <option value="th2">TH</option>
+                            <option value="tw2">TW</option>
+                            <option value="vn2">VN</option>
+                        </select>
+                    </div>
+                </div>
+                <p id="setupError" class="setup-error" style="display: none;"></p>
+                <button id="setupSaveBtn" class="setup-save-btn" onclick="saveSetup()">Save & Start</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Match Detail Modal -->
+    <div class="modal-overlay" id="matchModal" onclick="closeModalOnBackdrop(event)">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div class="modal-header" id="modalHeader">
+                <!-- Populated by JS -->
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Tooltip for Items/Runes -->
+    <div id="gameTooltip" class="game-tooltip" style="display: none;">
+        <div class="tooltip-title"></div>
+        <div class="tooltip-description"></div>
+    </div>
+
+    
+    <script src="renderer.js"></script>
+</body>
+</html>

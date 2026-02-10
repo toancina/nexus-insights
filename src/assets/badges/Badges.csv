@@ -1,0 +1,40 @@
+Region,Badge Name,Description,Technical Logic (Riot Match-V5)
+Bandle City,David vs Goliath,You survived on a prayer and 5% health while taking down 3 enemies. Peak yordle energy.,onKill where victim.kill occurs while player.current_hp / player.max_hp < 0.05.
+Bandle City,Small But Mighty,You dealt the most damage on your team despite having the lowest total health pool.,Final stats: totalDamageDealt == max(team) AND max_hp == min(team).
+Bandle City,The Mayor’s Decree,You had the highest Vision Score and most Assists on your team. You run this town.,Final stats: visionScore == max(team) AND assists == max(team).
+Noxus,The Blood-Crowned,One Pentakill is a fluke; two in one game is a war crime. Welcome to the high command.,multikill >= 5 count in metadata. Trigger if count == 2.
+Noxus,Iron Will,You secured 3+ kills while being outnumbered (1v2 or 1v3) in the immediate area.,onKill where enemy_count_in_1000_range > ally_count_in_1000_range. Trigger on count >= 3.
+Noxus,Total Annexation,You participated in every single turret destruction on the map. The empire's borders only move forward.,turret_kill_participation (killer or assist) count matches total_enemy_turrets_destroyed.
+Demacia,The Unyielding Aegis,You were present for every single Epic Monster kill. A true vanguard never misses an objective.,participation_rate on elite_monster_kills (Dragon/Baron/Herald) == 1.0.
+Demacia,Hittin' a Wall,"You mitigated 50,000+ damage during the match. They broke their swords against your resolve.","Final stats check: damageSelfMitigated + totalDamageTaken >= 50,000."
+Demacia,For the King,You were the first person to deal damage in 5 separate teamfight kills. You lead the charge.,"For onKill events, check damage_log. Trigger if player has the earliest timestamp of all assisters."
+Bilgewater,King of the Docks,You finished with the highest gold count in the lobby. Everyone else is just a stowaway.,Final stats check: totalGoldEarned == max(all_10_players_gold).
+Bilgewater,Sea Monster's Tithe,"You stole Baron while your entire team was dead. High stakes, higher reward.",elite_monster_kill by player while team_alive_count == 1.
+Bilgewater,Treasure Map Locator,"You reached 4,000 gold by the 10:00 mark. You’ve got a nose for the ""shiny"" stuff.",Query timeline.frames[10]. Sum totalGold (passive + active income) >= 4000.
+Freljord,The Unbroken Will,"You won after being down 10,000 gold. The ice doesn't break, and neither do you.",Timeline check: enemy_team_gold - team_gold >= 10000 at any frame + win == true.
+Freljord,Where Are You Going?,100+ CC score and 15+ assists. You turned the enemy team into living statues.,Final stats check: timeCCingOthers >= 100 AND assists >= 15.
+Freljord,Heart of the Ram,"You mitigated 10,000 damage in a single 20-second fight. You are the mountain.","Sum damageSelfMitigated within a sliding 20000ms window. Trigger if >= 10,000."
+Ionia,The Spirit's Balance,100% Kill Participation. You were the heartbeat of every single fight on the map.,Final Stats: (kills + assists) / team_total_kills == 1.0.
+Ionia,Dance of the First Lands,You hit all 5 enemies with a single Ultimate. A perfect symphony of destruction.,onAbilityHit where spell_slot == R and unique_targets_hit == 5.
+Ionia,Death by a Thousand Petals,You secured 3 kills in a row where each kill was dealt by a different ability.,"Track killing_blow_source. Trigger if kill_1, kill_2, and kill_3 use 3 unique spell_ids."
+Piltover,Hextech Perfection,0 deaths and 10+ CS per minute. Efficiency that would make Camille blush.,deaths == 0 AND (totalMinionsKilled / (gameDuration / 60)) >= 10.0.
+Piltover,Clockwork Multiplier,You secured a Triple Kill or higher using only your auto-attacks. No mana wasted.,multikill >= 3 where damage_source_type for all killing blows is BASIC_ATTACK.
+Piltover,Piltovan Sniper,"You secured a kill from over 2,000 units away. Distance is just another variable.","onKill where distance(killer_coords, victim_coords) >= 2000."
+Zaun,Chem-Tech Overdrive,"You pumped out 2,000 damage while below 10% health. High-octane desperation.",totalDamageDealt within 5s window where player.hp / max_hp < 0.10.
+Zaun,Unstable Mutation,You used 4 different abilities or items to secure 4 kills. Versatility is your only constant.,Track kill_source_id for last 4 kills. Trigger if all 4 IDs are unique.
+Zaun,Toxic Work Culture,"You dealt 10,000+ total True Damage or Damage-over-time (Burn/Poison) in one match.",Final Stats: trueDamageDealtToChampions + totalDamageOverTimeDealt >= 10000.
+Targon,The Star-Crossed Hero,You denied 10 killing blows on allies. You didn't just support them; you saved their souls.,damage_event (lethal) negated by player.shield or player.heal count >= 10.
+Targon,Peak Performance,You reached Level 18 before anyone else in the match. The view is better from the top.,player.level == 18 timestamp is the minimum of all 10 players.
+Targon,Celestial Impact,You CC'd all 5 enemies simultaneously using a single ability. A cosmic alignment.,onAbilityHit where cc_debuff_applied count >= 5 in a single timestamp.
+Shurima,The Ascended Emperor,"Highest gold, damage, and level. Tell the people what you have seen today.",gold == max AND damage == max AND level == max across all 10 players.
+Shurima,Architect of Ruin,"You destroyed a tower, an inhibitor, and a nexus turret in one continuous push.","building_kill events for turret, inhibitor, and nexus_turret all by player within 60s."
+Shurima,The Emperor’s Tax,You took every single jungle camp (including the enemy's) in one rotation. All belongs to Shurima.,neutral_minion_kill of all 4 buff_camps (Red/Blue both sides) within a 120s window.
+Shadow Isles,Death is Only the Start,You got a Triple Kill while gray-screened. Death is just a change in management.,multikill >= 3 where killer.isDead == true.
+Shadow Isles,The Harrowing Mist,10+ takedowns inside the enemy base. The mist has finally claimed their home.,kill.coordinates inside enemy_base_polygon count >= 10.
+Shadow Isles,Soul-Siphon Surge,You healed for 100% of your maximum HP during a single continuous fight.,totalHealOnSelf within a 15s combat window >= player.max_hp.
+Ixtal,Elemental Ambush,You secured a kill within 3 seconds of leaving a bush. They never saw the leaves move.,onKill where timestamp - last_brush_exit_timestamp < 3000ms.
+Ixtal,Jungle Stalker,You killed the enemy Jungler in their own jungle multiple times. Their camps are your camps now.,onKill on victim.role == JUNGLE inside enemy_jungle_coords count >= 4.
+Ixtal,The Unseen Gardener,You cleared 15+ wards and secured 2 kills while remaining undetected by the enemy.,wards_killed >= 15 AND player_visible_to_enemy_count was 0 for 90% of the match.
+The Void,Evolve and Consume,You shut down an enemy who had a significant gold lead. Adaptation is the key to survival.,onKill where victim.gold_at_timestamp > player.gold_at_timestamp + 2000.
+The Void,Oblivion's Call,Over 30% of your damage was True Damage. Resistances are an illusion you’ve deleted.,Final stats: trueDamageDealtToChampions / totalDamageDealtToChampions >= 0.30.
+The Void,The Void's Reach,You secured a kill from your own fountain while the victim was in their base.,onKill where killer_coords are in Ally_Fountain_Radius AND victim_coords in Enemy_Base_Polygon.
