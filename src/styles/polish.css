@@ -811,3 +811,43 @@ body {
    18px card padding, nothing extra. */
 #history-tab .main-card { padding-top: 18px; }
 #history-tab .match-history { margin-top: 0; }
+
+/* ==========================================================================
+   Shared top bar (#52)
+   --------------------------------------------------------------------------
+   Riot ID, Sync and the filters live in #topBar, outside the pages, and show
+   on Analytics, Match History, Champions and Allies (body.has-top-bar, set by
+   switchTopTab). Sticky: it scrolls with the page until it reaches the title
+   bar, then stays there. The pages under it drop the title-bar part of their
+   top padding, since the bar now sits there.
+   ========================================================================== */
+.top-bar {
+    display: none;
+    position: sticky;
+    top: var(--titlebar-height);
+    z-index: 40;
+    margin-top: calc(var(--titlebar-height) + var(--gutter));
+    padding: 0 var(--gutter);
+}
+body.has-top-bar .top-bar { display: block; }
+
+.top-bar-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--r-panel);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    padding: 12px 18px;
+}
+.top-bar-card .progress-container { margin-top: 12px; }
+
+body.has-top-bar .app-container,
+body.has-top-bar .champions-shell { padding-top: var(--gutter); }
+
+/* A filter the current page ignores: visibly off (see renderer TOP_BAR_PAGES) */
+.top-bar select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}

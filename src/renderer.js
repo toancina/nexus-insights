@@ -1046,6 +1046,34 @@ const TOP_TABS = {
     skins:     { panel: 'skins-tab',     nav: 'navSkins'     },
 };
 
+// Pages that show the shared top bar (#52), with the filters each one ignores:
+// Champions and Allies list every champion and have no role filter of their own
+// (Champions has role chips), so those dropdowns are shown disabled there.
+const IGNORES_CHAMP_ROLE = {
+    champFilter: 'lists every champion, so the champion filter doesn\'t apply here',
+    roleFilter:  'doesn\'t use the role filter',
+};
+const TOP_BAR_PAGES = {
+    analytics: {},
+    history:   {},
+    champions: IGNORES_CHAMP_ROLE,
+    teammates: IGNORES_CHAMP_ROLE,
+};
+
+function updateTopBar(tab) {
+    const page = TOP_BAR_PAGES[tab];
+    document.body.classList.toggle('has-top-bar', !!page);
+    const pageName = { champions: 'The Champions page', teammates: 'The Allies page' }[tab];
+    for (const id of ['champFilter', 'roleFilter']) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (el.dataset.title === undefined) el.dataset.title = el.title || '';
+        const why = page && page[id];
+        el.disabled = !!why;
+        el.title = why ? `${pageName} ${why}` : el.dataset.title;
+    }
+}
+
 window.switchTopTab = function (tab) {
     if (!TOP_TABS[tab]) tab = 'analytics';
 
@@ -1056,6 +1084,7 @@ window.switchTopTab = function (tab) {
         if (panel) panel.style.display = on ? 'block' : 'none';
         if (nav)   nav.classList.toggle('active', on);
     }
+    updateTopBar(tab);
 
     // Picking a section is the end of the interaction — get the drawer out
     // of the way so the page it just revealed is actually visible.
