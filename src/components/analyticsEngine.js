@@ -4,6 +4,7 @@ const {
 } = require('../services/matchService');
 const { RANK_COLORS } = require('./rankTiers');
 const { benchmarkFor } = require('./roleBenchmarks');
+const RoleRanks = require('./roleRanks');
 const { decodePurchases, firstBackStats, firstBackAt } = require('../services/itemBuild');
 const { impactFor } = require('../services/teamImpact');
 const { platesTakenBy } = require('../services/timelineRules');
@@ -438,7 +439,8 @@ function buildCard(id, label, tab, value, formatFn, aggregationType, benchmarkab
         const trendVal = value - prevValue;
         if (Math.abs(trendVal) > 0.01) { // ignore floating point noise
             trendStr = trendVal > 0 ? '+' + formatNum(trendVal, 1) : formatNum(trendVal, 1);
-            isImproving = higherIsBetter ? (trendVal > 0) : (trendVal < 0);
+            // null = neither direction is better: show the change, no green/red (#56)
+            isImproving = higherIsBetter === null ? null : higherIsBetter ? (trendVal > 0) : (trendVal < 0);
         } else {
             trendStr = "0.0";
             isImproving = null;
@@ -725,14 +727,95 @@ window.getStatBenchmark = function (statId, role = null) {
  * role's thresholds from roleBenchmarks.js where it has them: the Analytics
  * page passes it when its role filter picks one role.
  */
-window.computeTabStats = function (tabName, matches, prevMatches = [], { role = null } = {}) {
+window.computeTabStats = function (tabName, matches, prevMatches = [], { role = null, roleWeighted = false } = {}) {
+    if (roleWeighted) {
+        return role
+            ? withoutNotApplicable(computeWithRole(tabName, matches, prevMatches, role), role)
+            : roleWeightedCards(tabName, matches, prevMatches);
+    }
+    return computeWithRole(tabName, matches, prevMatches, role || null);
+};
+
+function computeWithRole(tabName, matches, prevMatches, role) {
     benchmarkRole = role || null;
     try {
         return computeCards(tabName, matches, prevMatches);
     } finally {
         benchmarkRole = null;
     }
-};
+}
+
+/** A card with no value: "--", no rank, no trend. */
+function emptyCard(card) {
+    return { ...card, value: null, displayValue: '--', benchmarkRank: card.benchmarkable ? 'unrated' : null,
+             color: card.benchmarkable ? RANK_COLORS.unrated : 'neutral', trend: null, isImproving: null };
+}
+
+/** One role picked: stats that don't apply to it show "--" (plates for junglers). */
+function withoutNotApplicable(cards, role) {
+    const r = RoleRanks.roleOf({ teamPosition: role });
+    return cards.map(c => (RoleRanks.notApplicable(c.id, r) ? emptyCard(c) : c));
+}
+
+/**
+ * Role-weighted rank badges (#56). The cards are computed as before over every
+ * game; then, for each rank-badged card:
+ * - each role's games are computed on their own, and that role's value is
+ *   scored on the role's ladder (Iron 0 … Challenger 9, continuous)
+ * - the scores are averaged weighted by games, and the tier of that average
+ *   becomes the badge and colour
+ * - roles the stat doesn't apply to (plates for junglers, CS for supports) are
+ *   left out, of the value and trend too; with none left the card shows "--"
+ * card.roleBreakdown lists each role's value and tier for the tooltip.
+ */
+function roleWeightedCards(tabName, matches, prevMatches = []) {
+    const cards = computeWithRole(tabName, matches, prevMatches, null);
+    if (!cards.length) return cards;
+
+    const groups = RoleRanks.groupByRole(matches);
+    const prevByRole = new Map(RoleRanks.groupByRole(prevMatches).map(g => [g.role, g.matches]));
+    const perRole = groups.map(g => ({
+        role: g.role,
+        games: g.matches.length,
+        cards: new Map(computeWithRole(tabName, g.matches, prevByRole.get(g.role) || [], g.role).map(c => [c.id, c])),
+    }));
+
+    // Cards recomputed without the roles they don't apply to, one set per set of excluded roles
+    const subsetCache = new Map();
+    const subsetCards = (excluded) => {
+        const key = excluded.join(',');
+        if (!subsetCache.has(key)) {
+            const keep = m => !excluded.includes(RoleRanks.roleOf(m));
+            const list = matches.filter(keep);
+            subsetCache.set(key, list.length
+                ? new Map(computeWithRole(tabName, list, (prevMatches || []).filter(keep), null).map(c => [c.id, c]))
+                : new Map());
+        }
+        return subsetCache.get(key);
+    };
+
+    return cards.map(card => {
+        if (!card.benchmarkable) return card;
+        const excluded = groups.map(g => g.role).filter(r => RoleRanks.notApplicable(card.id, r));
+        let out = card;
+        if (excluded.length) {
+            const sub = subsetCards(excluded).get(card.id);
+            out = sub ? { ...sub } : emptyCard(card);
+        }
+        const entries = [];
+        for (const pr of perRole) {
+            if (excluded.includes(pr.role)) continue;
+            const rc = pr.cards.get(card.id);
+            if (!rc || rc.value === null || rc.value === undefined || Number.isNaN(rc.value)) continue;
+            const score = RoleRanks.tierScore(rc.value, thresholdsFor(card.id, pr.role), card.higherIsBetter);
+            entries.push({ role: pr.role, games: pr.games, value: rc.value, displayValue: rc.displayValue,
+                           score, tier: score === null ? null : RoleRanks.scoreToTier(score) });
+        }
+        const combined = RoleRanks.combineScores(entries);
+        if (!combined || out.value === null) return { ...emptyCard(out), roleBreakdown: entries };
+        return { ...out, benchmarkRank: combined.tier, color: RANK_COLORS[combined.tier], roleBreakdown: entries };
+    });
+}
 
 function computeCards(tabName, matches, prevMatches = []) {
     if (!matches || matches.length === 0) return [];
@@ -853,14 +936,14 @@ function computeCards(tabName, matches, prevMatches = []) {
             // Median time of your first purchase after the opening shop (#7).
             // No benchmark or trend arrow: an earlier back isn't simply better.
             const hasBacks = cur.firstBackGames > 0;
-            cards.push(buildCard('eco_first_back', 'Median First Back', tabName, cur.firstBackMin, v => hasBacks ? fmtClock(v) : '--', 'average', false, false, null));
+            cards.push(buildCard('eco_first_back', 'Median First Back', tabName, cur.firstBackMin, v => hasBacks ? fmtClock(v) : '--', 'average', false, null, null));
             break;
         }
 
         case 'Macro': {
             const cur = calcMacro(matches);
             const prev = calcMacro(prevMatches);
-            cards.push(buildCard('mac_dur',       'Avg Game Length',    tabName, cur.avgDur,   v => formatNum(v,1)+'m', 'average',    false, true,  prev ? prev.avgDur : null));
+            cards.push(buildCard('mac_dur',       'Avg Game Length',    tabName, cur.avgDur,   v => formatNum(v,1)+'m', 'average',    false, null,  prev ? prev.avgDur : null));
             cards.push(buildCard('mac_fb',        'First Blood Rate',   tabName, cur.fbRate,   v => formatPct(v/100),   'percentage', true,  true,  prev ? prev.fbRate : null));
             cards.push(buildCard('mac_obj_rate',  'Alive for Objectives', tabName, cur.objRate, v => formatPct(v/100), 'percentage', false, true,  prev ? prev.objRate : null));
             cards.push(buildCard('mac_dragon_ctl','Dragon Control %',   tabName, cur.dragonCtl,v => formatPct(v/100),   'percentage', true, true,  prev ? prev.dragonCtl : null));

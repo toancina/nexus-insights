@@ -232,3 +232,53 @@ test('objective/turret damage per minute and first death cards (#15)', () => {
     const none = window.computeTabStats('Objectives', [games[2]], []);
     assert.equal(cardById(none, 'turret_dmg_min').displayValue, '--');
 });
+
+// ---------------------------------------------------------------------------
+// Role-weighted rank badges (#56)
+// ---------------------------------------------------------------------------
+test('role-weighted: plates ignore jungle games, rank per lane ladder, breakdown by role', () => {
+    const lane = (role, lost, taken) => makeMatch({ teamPosition: role, statsComputedAt: 1, platesLost: lost, platesTaken: taken });
+    const games = [
+        ...Array.from({ length: 6 }, () => lane('JUNGLE', 0, 0)),
+        ...Array.from({ length: 3 }, () => lane('MIDDLE', 1.3, 1.5)),
+        ...Array.from({ length: 1 }, () => lane('TOP', 1.8, 1.7)),
+    ];
+    const plain = cardById(window.computeTabStats('Lane Phase', games, []), 'plates_lost');
+    const weighted = cardById(window.computeTabStats('Lane Phase', games, [], { roleWeighted: true }), 'plates_lost');
+
+    // Old behaviour: jungle zeros drag the average down to "Grandmaster"-ish
+    assert.ok(plain.value < 0.6);
+    // New: laner games only (3 × 1.3 + 1 × 1.8) / 4, ranked per lane → Gold
+    assert.ok(Math.abs(weighted.value - 1.425) < 1e-9);
+    assert.equal(weighted.benchmarkRank, 'gold');
+    assert.deepEqual(weighted.roleBreakdown.map(e => [e.role, e.games, e.tier]), [['MIDDLE', 3, 'gold'], ['TOP', 1, 'silver']]);
+
+    // Plates Taken: same games, jungle left out instead of dragging it toward Iron
+    const taken = cardById(window.computeTabStats('Lane Phase', games, [], { roleWeighted: true }), 'plates_taken');
+    assert.ok(Math.abs(taken.value - 1.55) < 1e-9);
+});
+
+test('role-weighted: a role a stat doesn\'t apply to shows "--"', () => {
+    const jungle = Array.from({ length: 4 }, () => makeMatch({ teamPosition: 'JUNGLE', statsComputedAt: 1, platesLost: 0, platesTaken: 0 }));
+    for (const opts of [{ roleWeighted: true }, { roleWeighted: true, role: 'JUNGLE' }]) {
+        const c = cardById(window.computeTabStats('Lane Phase', jungle, [], opts), 'plates_lost');
+        assert.equal(c.displayValue, '--', JSON.stringify(opts));
+        assert.equal(c.value, null);
+    }
+    // Stats that do apply to junglers keep their value
+    const kda = cardById(window.computeTabStats('Overview', jungle, [], { roleWeighted: true, role: 'JUNGLE' }), 'avg_kda');
+    assert.notEqual(kda.displayValue, '--');
+});
+
+test('role-weighted: supports get scaled ladders; without the flag nothing changes', () => {
+    const sup = Array.from({ length: 5 }, () => makeMatch({ teamPosition: 'UTILITY', totalDamageDealtToChampions: 9000, gameDuration: 1800 }));
+    const general = cardById(window.computeTabStats('Overview', sup, []), 'dmg_min');
+    const weighted = cardById(window.computeTabStats('Overview', sup, [], { roleWeighted: true }), 'dmg_min');
+    assert.equal(general.value, weighted.value);                 // same number
+    assert.equal(general.benchmarkRank, 'iron');                 // 300 dmg/min on the general ladder
+    assert.notEqual(weighted.benchmarkRank, 'iron');             // a support's ladder is 0.6x
+    // Neutral trend arrow for game length
+    const longer = cardById(window.computeTabStats('Macro', [makeMatch({ gameDuration: 2400 })], [makeMatch({ gameDuration: 1500 })]), 'mac_dur');
+    assert.equal(longer.isImproving, null);
+    assert.ok(longer.trend);
+});
