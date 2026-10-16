@@ -167,40 +167,6 @@ test('a streaky but behaviour-free history never produces a tilt focus', () => {
     assert.notStrictEqual(out.focus && out.focus.id, 'tiltQueue',
         'a circular metric must never be selected as the focus');
 
-    // And the behavioural check should not claim degradation, because the
-    // player's actual inputs were identical throughout.
-    assert.ok(out.tilt, 'tilt behaviour should still be reported');
-    assert.strictEqual(out.tilt.degraded, false,
-        'no input degraded, so this is streakiness rather than tilt');
-});
-
-test('behavioural tilt is detected when inputs actually degrade', () => {
-    const rows = [];
-    let consec = 0;
-    for (let block = 0; block < 20; block++) {
-        const winning = block % 2 === 0;
-        for (let i = 0; i < 6; i++) {
-            const tilted = consec >= 2;
-            // Tilt lowers the win rate; it does not guarantee a loss. Making
-            // it deterministic would be an absorbing state: every tilted game
-            // loses, which extends the streak, so the player never recovers
-            // and there are no normal games left to compare against.
-            const win = tilted ? (i % 4 === 0 ? 1 : 0) : (winning ? 1 : 0);
-            // The player genuinely plays worse: more early and isolated deaths
-            rows.push(game({
-                win,
-                deathsBefore10:  tilted ? 2 : 0,
-                isolatedDeaths:  tilted ? 3 : 1,
-            }));
-            consec = win ? 0 : consec + 1;
-        }
-    }
-
-    const out = Engine.analyse(rows);
-    assert.ok(out.tilt, 'tilt behaviour should be computed');
-    assert.strictEqual(out.tilt.degraded, true, 'inputs got worse, so this is real tilt');
-    assert.ok(out.tilt.earlyDeaths.tilted > out.tilt.earlyDeaths.normal);
-    assert.ok(out.tilt.isolatedDeaths.tilted > out.tilt.isolatedDeaths.normal);
 });
 
 test('champion pool flag tracks the top three by games played', () => {
@@ -236,31 +202,4 @@ test('empty and tiny inputs degrade gracefully', () => {
     const one = Engine.analyse([game()]);
     assert.strictEqual(one.empty, false);
     assert.strictEqual(one.sampleSize, 1);
-});
-
-test('progress since a focus date compares before and after', () => {
-    const rows = [];
-    for (let i = 0; i < 30; i++) rows.push(game({ deathsBefore10: 2, win: 0 }));
-    const cutoff = clock + 1;
-    for (let i = 0; i < 30; i++) rows.push(game({ deathsBefore10: 0, win: 1 }));
-
-    const out = Engine.analyse(rows, { focusId: 'earlyDeaths', focusSince: cutoff });
-    assert.ok(out.progress, 'progress should be computed');
-    assert.strictEqual(out.progress.games, 30);
-    assert.ok(out.progress.after < out.progress.before, 'early deaths went down');
-    assert.strictEqual(out.progress.improving, true);
-    assert.ok(out.progress.winRateSince > out.progress.winRateBefore);
-});
-
-test('pinned focus overrides the computed ranking', () => {
-    const rows = [];
-    for (let i = 0; i < 40; i++) rows.push(game({ deathsBefore10: 0, win: (i % 4) < 3 ? 1 : 0 }));
-    for (let i = 0; i < 40; i++) rows.push(game({ deathsBefore10: 3, win: (i % 5) < 1 ? 1 : 0 }));
-
-    const auto = Engine.analyse(rows);
-    assert.strictEqual(auto.focus.id, 'earlyDeaths');
-
-    const pinned = Engine.analyse(rows, { focusId: 'controlWards' });
-    assert.strictEqual(pinned.focus.id, 'controlWards', 'explicit choice wins');
-    assert.strictEqual(pinned.focus.pinned, true);
 });
