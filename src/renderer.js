@@ -37,6 +37,7 @@ window.require('./components/roleBreakdown');  // registers renderRoleBreakdown 
 window.require('./components/deathMapPanel');  // registers renderDeathMap (map under Death Review)
 window.require('./components/championsPanel'); // registers openChampionsPanel (Champions page)
 window.require('./components/teammatesPanel'); // registers openTeammatesPanel (Teammates page)
+window.require('./components/liveGamePanel');  // registers openLiveGamePanel (Live page, #59)
 window.require('./components/periodFilter');   // registers updatePeriodDropdown, applyPeriodFilter, renderPatchWinRates
 
 // Destructure named exports needed inside renderer.js itself
@@ -482,6 +483,12 @@ async function handleGameEnded() {
     }
 }
 
+/** "LIVE" on the Live page's nav button while a game is running (#59). */
+function setLiveBadge(on) {
+    const badge = document.getElementById('liveBadge');
+    if (badge) badge.textContent = on ? 'LIVE' : '';
+}
+
 async function pollLiveClient() {
     if (livePollBusy) return;
     livePollBusy = true;
@@ -494,9 +501,11 @@ async function pollLiveClient() {
             // "Before" reading, so the next one has something to measure from.
             captureLpReadings({ quiet: true }).catch(e => console.warn('Pre-game LP read failed:', e.message));
             showToast('Game Detected', 'Nexus Insights will log this game when it ends', 3500);
+            setLiveBadge(true);
         } else if (!inGame && wasInGame) {
             wasInGame = false;
             console.log('Live client: game ended');
+            setLiveBadge(false);
             handleGameEnded();
         }
     } catch (err) {
@@ -1041,6 +1050,7 @@ const TOP_TABS = {
     history:   { panel: 'history-tab',   nav: 'navHistory'   },
     champions: { panel: 'champions-tab', nav: 'navChampions' },
     teammates: { panel: 'teammates-tab', nav: 'navTeammates' },
+    live:      { panel: 'live-tab',      nav: 'navLive'      },
     coaching:  { panel: 'coaching-tab',  nav: 'navCoaching'  },
     chat:      { panel: 'chat-tab',      nav: 'navChat'      },
     skins:     { panel: 'skins-tab',     nav: 'navSkins'     },
@@ -1109,6 +1119,10 @@ window.switchTopTab = function (tab) {
 
     if (tab === 'champions' && typeof window.openChampionsPanel === 'function') {
         window.openChampionsPanel();
+    }
+
+    if (tab === 'live' && typeof window.openLiveGamePanel === 'function') {
+        window.openLiveGamePanel();
     }
 
     if (tab === 'teammates' && typeof window.openTeammatesPanel === 'function') {

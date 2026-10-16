@@ -84,6 +84,8 @@ src/
 │   ├── updater.js             # electron-updater wrapper (GitHub Releases)
 │   ├── ollama.js              # Local Ollama client
 │   ├── liveClient.js          # League Live Client Data API
+│   ├── liveGame.js / liveGameLoader.js / liveGameStore.js  # Live page: rules, Riot calls, cache (#59)
+│   ├── riotErrors.js          # User-facing text for Riot API errors (sync + Live)
 │   └── paths.js / rateLimiter.js
 └── styles/
     ├── app.css                # Main stylesheet (dark theme, gold/teal accents)
@@ -99,7 +101,7 @@ src/
 
 - **Dark theme** throughout, with gold/teal CSS custom property accents
 - **Title bar**: Nexus logo + name on the left, ⟳ update button and ⚙ settings (SVG) top-right
-- **Left nav rail** (always visible): Analytics (default), Match History, Champions, Allies (the Teammates page; the full word wraps in the 78px rail), Coaching, Chat, Skins
+- **Left nav rail** (always visible): Analytics (default), Match History, Champions, Allies (the Teammates page; the full word wraps in the 78px rail), Live, Coaching, Chat, Skins
 - **Analytics tab**:
   - The **shared top bar** (#52) above the page: Summoner Name # Tag, "Sync Matches", game-mode / period / champion / role filters, and the sync progress bar. Shown on Analytics, Match History, Champions and Allies, pinned under the title bar while scrolling
   - 9 analytical sub-tabs (pill-button row): Overview · Lane Phase · Combat · Death Review · Objectives · Vision · Economy · Macro · Consistency
@@ -238,7 +240,7 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 - **No other players' ranks** (issue #29): sync used to call League-V4 for
   every player in every new game (~12,000 calls, ~4 h on a dev key for a
   1,740-game first sync) and nothing read them. Removed; the `player_ranks`
-  table stays. If ranks are shown later, fetch them when a game is opened
+  table stays. The Live page (#59) fetches ranks on demand and caches them there
 - **Queue filter**: Only stores 420 (Solo), 440 (Flex), 710 (Ranked Premade: the 5-stack ranked queue, League-V4 `RANKED_PREMADE_5x5`; not in Riot's queues.json), 400 (Normal Draft), 430 (Blind), 480 (Swiftplay), 490 (Quickplay), 700 (Clash)
 - **Rate limiting**: Sequential processing, 150ms delay between every API call
 - **Timestamp format**: the app stores **milliseconds** (`gameCreation`, 13 digits) everywhere, and `riotApi.getMatchIds()` converts to **seconds** (`Math.floor(ms / 1000)`) for Match-V5's `startTime`, which Riot defines in seconds. Pass `getMatchIds` milliseconds; don't remove the conversion (#41: this note used to say Riot takes milliseconds)
@@ -584,6 +586,43 @@ tested). Nav rail button between Match History and Coaching.
   Win Rate by Game Length (one `ta-right-row`, so the section's height
   doesn't change).
 
+### Live page (2026-10, issue #59)
+
+**Detect live game** lists the 10 players of the game running on this PC
+with rank, mastery on their champion, last 10 Solo/Duo games and tags, like
+Blitz/Porofessor. Nav button "Live" (after Allies); its badge says `LIVE`
+while the live watcher (`pollLiveClient`) sees a game.
+
+- **Players** come from the local Live Client Data API
+  (`liveClient.getPlayerList` / `getActivePlayerName`, no key, no limit).
+  With no game it says so and makes **no** Riot calls. Spectator-V5 is no
+  use (featured-games 403, active-games 404 "filtered", 2026-10-16), and the
+  page never reads champ select (LCU): Riot's policies forbid
+  de-anonymizing it. Whether `playerlist` answers on the loading screen is
+  still unchecked (needs a real game).
+- `services/liveGame.js` (pure, tested): `parsePlayers` (your team first;
+  by position only when every player has one, so ARAM keeps the client's
+  order), `findChampion` (Live Client names → Data Dragon id + numeric key,
+  via `dataDragon.getChampionList()`, now loaded with the other data),
+  `recentForm`, `playerTags`, `rankSummary`, `gamesTogether`.
+- `services/liveGameLoader.js` (tested with a fake API and store): phase 1,
+  everyone at once: PUUID, ranks, mastery (~30 calls). Phase 2, one player
+  at a time, enemies first: recent ids, then only the games not stored yet.
+  Your own row uses `window.matchesData`. A 401/403 stops everything and
+  shows sync's message (`services/riotErrors.js`); other errors mark that
+  row. Clicking again cancels the running load (generation counter).
+- **Cache** (`services/liveGameStore.js`, schema made on first use): ranks
+  in `player_ranks` (+ W/L and `soloFlags`), other players' games in
+  `player_games (matchId, puuid, …)`, one row per player, all ten stored
+  per fetched match. PUUIDs, mastery and id lists are kept in memory for the
+  app run. All for 24 h (`CACHE_TTL_MS`). Real numbers: a first look took
+  107 calls (~2 min on a dev key), the same game again 0, after a restart 29.
+- **Testing without a game:** serve `/liveclientdata/playerlist`,
+  `/activeplayername` and `/gamestats` from a self-signed HTTPS server on
+  127.0.0.1:2999 (a real game's participants make a good fixture). The live
+  watcher then sees a "game"; quit the app before stopping the server, or
+  the game-end handler runs a sync.
+
 ### Teammates page (2026-10, issue #11)
 
 - `components/teammatesPanel.js` (page) + `services/teammates.js` (pure,
@@ -884,7 +923,7 @@ The sliding drawer is gone. `#navDrawer` carries `nav-rail` and is always
 visible (78px, `--nav-rail-width`; `body` is padded by that). Buttons stack
 icon over label. `openNavDrawer/closeNavDrawer/toggleNavDrawer` in renderer.js
 are kept as no-ops so older callers don't break. Pages: Analytics, Match
-History, Champions, Coaching, Chat, Skins (`TOP_TABS` in renderer.js).
+History, Champions, Allies, Live, Coaching, Chat, Skins (`TOP_TABS` in renderer.js).
 
 ### Chat page (Ollama) — 2026-10
 
