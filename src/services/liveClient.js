@@ -91,6 +91,22 @@ async function getLiveGame() {
 }
 
 /**
+ * Every player in the running game (Live page, #59): the raw
+ * /liveclientdata/playerlist array (Riot ID, champion, team, position,
+ * spells, keystone), or null when no game is running.
+ */
+async function getPlayerList() {
+    const list = await liveGet('/liveclientdata/playerlist');
+    return Array.isArray(list) && list.length ? list : null;
+}
+
+/** Your Riot ID in the running game ("name#tag"), or null. */
+async function getActivePlayerName() {
+    const name = await liveGet('/liveclientdata/activeplayername');
+    return typeof name === 'string' && name ? name : null;
+}
+
+/**
  * Diagnostic helper — call `window.testLiveClient()` from devtools while a game
  * is running to see whether the app can reach the client at all.
  */
@@ -110,4 +126,4 @@ async function testConnection() {
     };
 }
 
-module.exports = { getLiveGame, testConnection };
+module.exports = { getLiveGame, getPlayerList, getActivePlayerName, testConnection };

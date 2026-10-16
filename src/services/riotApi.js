@@ -184,6 +184,10 @@ async function getLeagueByPuuid(puuid) {
             leaguePoints: entry.leaguePoints,
             wins: entry.wins,
             losses: entry.losses,
+            hotStreak: !!entry.hotStreak,
+            veteran: !!entry.veteran,
+            freshBlood: !!entry.freshBlood,
+            inactive: !!entry.inactive,
         } : null;
 
         return {
@@ -194,6 +198,37 @@ async function getLeagueByPuuid(puuid) {
         console.error('Error fetching league data:', describeError(error));
         throw error;
     }
+}
+
+/**
+ * A player's mastery on one champion (Live page, #59): { level, points,
+ * lastPlayTime } or null when they have never played it (Riot answers 404).
+ */
+async function getChampionMastery(puuid, championKey) {
+    const PLATFORM = getPlatform();
+    try {
+        const m = await riotGet(
+            `https://${PLATFORM}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/by-champion/${championKey}`,
+            { label: `mastery ${championKey}`, timeout: 10000 }
+        );
+        return { level: m.championLevel, points: m.championPoints, lastPlayTime: m.lastPlayTime };
+    } catch (error) {
+        if (error.response?.status === 404) return null;
+        console.error('Error fetching champion mastery:', describeError(error));
+        throw error;
+    }
+}
+
+/**
+ * A player's newest match ids in one queue, one call (Live page, #59).
+ * getMatchIds pages through a whole history; this only wants the last few.
+ */
+async function getRecentMatchIds(puuid, { queue = 420, count = 10 } = {}) {
+    const REGION = getRegion();
+    return riotGet(
+        `https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids`,
+        { params: { start: 0, count, queue }, label: `recent ids q=${queue}` }
+    );
 }
 
 /** Error summary that never includes the API key. */
@@ -207,6 +242,7 @@ function describeError(error) {
 module.exports = {
     getMatchIds, getMatchData, getMatchTimeline,
     getPuuidByRiotId, getSummonerByPuuid, getLeagueByPuuid,
+    getChampionMastery, getRecentMatchIds,
     limiter,
     PLATFORM_ROUTING, routingFor, accountRoutingFor,
 };
