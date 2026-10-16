@@ -63,6 +63,7 @@ src/
 │   ├── coachingProgress.js    # Coaching calculations (pure, tested)
 │   ├── coachingEngine.js      # Picks the focus metric
 │   ├── chatPanel.js / chatAgent.js / chatTools.js / markdown.js  # Chat page (Ollama)
+│   ├── liveGamePanel.js       # Live page (#59)
 │   ├── championsPanel.js      # Champions page (numbers: services/championStats.js)
 │   ├── skins.js / skinsPanel.js   # Skins data + Skins page
 │   ├── statHistory.js         # Click-a-card history chart
@@ -588,7 +589,7 @@ tested). Nav rail button between Match History and Coaching.
 
 ### Live page (2026-10, issue #59)
 
-**Detect live game** lists the 10 players of the game running on this PC
+`components/liveGamePanel.js`: **Detect live game** lists the 10 players of the game running on this PC
 with rank, mastery on their champion, last 10 Solo/Duo games and tags, like
 Blitz/Porofessor. Nav button "Live" (after Allies); its badge says `LIVE`
 while the live watcher (`pollLiveClient`) sees a game.
@@ -608,13 +609,17 @@ while the live watcher (`pollLiveClient`) sees a game.
 - `services/liveGameLoader.js` (tested with a fake API and store): phase 1,
   everyone at once: PUUID, ranks, mastery (~30 calls). Phase 2, one player
   at a time, enemies first: recent ids, then only the games not stored yet.
-  Your own row uses `window.matchesData`. A 401/403 stops everything and
-  shows sync's message (`services/riotErrors.js`); other errors mark that
-  row. Clicking again cancels the running load (generation counter).
+  Your own row uses `window.matchesData`, but only when the player is the
+  configured account (on an alt it loads through the API like the others).
+  A 401/403 stops everything, shows sync's message (`services/riotErrors.js`)
+  and marks every unfinished row; other errors mark that row. Clicking again
+  cancels the running load (generation counter).
 - **Cache** (`services/liveGameStore.js`, schema made on first use): ranks
-  in `player_ranks` (+ W/L and `soloFlags`), other players' games in
-  `player_games (matchId, puuid, …)`, one row per player, all ten stored
-  per fetched match. PUUIDs, mastery and id lists are kept in memory for the
+  in `player_ranks` (+ W/L and `soloFlags`; rows from before #59, with no
+  W/L, count as missing), other players' games in `player_games (matchId,
+  puuid, …)`, one row per player, only for players in the lobby (a game two
+  of them shared is downloaded once). Games older than 90 days are pruned
+  once per run. PUUIDs, mastery and id lists are kept in memory for the
   app run. All for 24 h (`CACHE_TTL_MS`). Real numbers: a first look took
   107 calls (~2 min on a dev key), the same game again 0, after a restart 29.
 - **Testing without a game:** serve `/liveclientdata/playerlist`,

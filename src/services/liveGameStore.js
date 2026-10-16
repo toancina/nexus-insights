@@ -21,6 +21,7 @@ const FLAGS = ['hotStreak', 'veteran', 'freshBlood', 'inactive'];
 const GAME_COLUMNS = ['matchId', 'puuid', 'queueId', 'gameCreation', 'championName', 'win',
     'kills', 'deaths', 'assists', 'isRemake'];
 const ROWS_PER_INSERT = 50;   // 500 parameters, well under SQLite's limit
+const KEEP_GAMES_MS = 90 * 24 * 60 * 60 * 1000;   // older games are pruned once per run
 
 let schema = null;
 
@@ -41,6 +42,7 @@ function ensureSchema() {
                 championName TEXT, win INTEGER, kills INTEGER, deaths INTEGER, assists INTEGER,
                 isRemake INTEGER, PRIMARY KEY (matchId, puuid))`);
             await run('CREATE INDEX IF NOT EXISTS idx_player_games_puuid ON player_games (puuid, gameCreation DESC)');
+            await run('DELETE FROM player_games WHERE gameCreation < ?', [Date.now() - KEEP_GAMES_MS]);
         })();
         schema.catch(() => { schema = null; });   // let the next call retry
     }
@@ -52,6 +54,8 @@ async function getRanks(puuid, maxAgeMs, now = Date.now()) {
     await ensureSchema();
     const r = await get('SELECT * FROM player_ranks WHERE puuid = ?', [puuid]);
     if (!r || r.fetchedAt < now - maxAgeMs) return null;
+    // Rows from before #59 have a tier but no W/L: fetch those again
+    if ((r.soloTier && r.soloWins == null) || (r.flexTier && r.flexWins == null)) return null;
 
     const flags = new Set(String(r.soloFlags || '').split(',').filter(Boolean));
     const entry = (tier, rank, lp, wins, losses, withFlags) => tier ? {
@@ -99,4 +103,10 @@ async function savePlayerGames(rows) {
     }
 }
 
-module.exports = { ensureSchema, getRanks, saveRanks, getPlayerGames, savePlayerGames };
+/** Drop stored games older than KEEP_GAMES_MS (ensureSchema does this once per run). */
+async function pruneOldGames(now = Date.now()) {
+    await ensureSchema();
+    await run('DELETE FROM player_games WHERE gameCreation < ?', [now - KEEP_GAMES_MS]);
+}
+
+module.exports = { ensureSchema, getRanks, saveRanks, getPlayerGames, savePlayerGames, pruneOldGames };

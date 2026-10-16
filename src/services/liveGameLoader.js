@@ -45,6 +45,20 @@ function createLiveGameLoader({ api, store, now = Date.now }) {
         };
         const update = (i) => { if (!stopped()) onUpdate(i, { ...entries[i] }); };
         const result = () => (keyError ? { error: friendlyRiotError(keyError) } : isCancelled() ? { cancelled: true } : { ok: true });
+        // After a key error, rows that didn't finish say so instead of "loading" forever
+        const finish = () => {
+            if (keyError && !isCancelled()) {
+                const message = friendlyRiotError(keyError);
+                for (const p of players.filter(x => x.lookup)) {
+                    const e = entries[p.index];
+                    if (e.league && e.form) continue;
+                    e.error = e.error || message;
+                    onUpdate(p.index, { ...e });
+                }
+            }
+            return result();
+        };
+        let lobby = new Set();   // PUUIDs in this game: only their rows are stored
 
         async function puuidOf(p) {
             if (p.puuid) return p.puuid;
@@ -86,7 +100,7 @@ function createLiveGameLoader({ api, store, now = Date.now }) {
                     console.warn(`Live game: match ${id} unavailable:`, err.message);
                     return null;   // leave this game out, keep the rest
                 })));
-            const rows = matches.filter(Boolean).flatMap(playerGameRows);
+            const rows = matches.filter(Boolean).flatMap(playerGameRows).filter(r => lobby.has(r.puuid));
             if (rows.length) await store.savePlayerGames(rows);
             return [...have, ...rows.filter(r => r.puuid === puuid)];
         }
@@ -104,7 +118,8 @@ function createLiveGameLoader({ api, store, now = Date.now }) {
             }
             update(p.index);
         }));
-        if (stopped()) return result();
+        if (stopped()) return finish();
+        lobby = new Set(entries.map(e => e.puuid).filter(Boolean));
 
         // Phase 2: recent games, enemies first
         const you = players.find(p => p.isYou);
@@ -117,9 +132,10 @@ function createLiveGameLoader({ api, store, now = Date.now }) {
         for (const p of queue) {
             if (stopped()) break;
             const e = entries[p.index];
-            if (p.isYou || e.puuid) {
+            const own = p.isYou && ownGames;   // null when you're on another account
+            if (own || e.puuid) {
                 try {
-                    const rows = p.isYou
+                    const rows = own
                         ? (ownGames || []).filter(g => g.queueId === RECENT_QUEUE)
                             .sort((a, b) => b.gameCreation - a.gameCreation).slice(0, RECENT_COUNT)
                         : await recentRows(e.puuid);
@@ -133,7 +149,7 @@ function createLiveGameLoader({ api, store, now = Date.now }) {
             done++;
             if (!stopped()) onProgress({ done, total: queue.length });
         }
-        return result();
+        return finish();
     }
 
     return { load };

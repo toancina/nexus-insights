@@ -81,3 +81,20 @@ test('ensureSchema is safe to run on a database that already has the columns', a
     for (const c of ['soloWins', 'soloLosses', 'flexWins', 'flexLosses', 'soloFlags']) assert.ok(cols.includes(c), c);
     assert.equal((await all("SELECT name FROM sqlite_master WHERE name = 'player_games'")).length, 1);
 });
+
+test('a rank row from before #59 (no W/L) counts as missing', async () => {
+    await created;
+    await store.ensureSchema();
+    await run(`INSERT OR REPLACE INTO player_ranks (puuid, soloTier, soloRank, soloLP, fetchedAt)
+               VALUES ('old', 'GOLD', 'II', 45, ?)`, [1900]);
+    assert.equal(await store.getRanks('old', 5000, 2000), null);
+});
+
+test('pruneOldGames drops games older than 90 days', async () => {
+    await created;
+    const DAY = 86400000;
+    const now = 200 * DAY;
+    await store.savePlayerGames([game('P-old', 'd', { gameCreation: now - 91 * DAY }), game('P-new', 'd', { gameCreation: now - 89 * DAY })]);
+    await store.pruneOldGames(now);
+    assert.deepEqual((await store.getPlayerGames('d', ['P-old', 'P-new'])).map(r => r.matchId), ['P-new']);
+});

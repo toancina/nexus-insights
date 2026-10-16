@@ -40,7 +40,7 @@ function matchFor(id) {
         metadata: { matchId: id },
         info: {
             queueId: 420, gameCreation: T - H, gameDuration: 1800,
-            participants: players.map(puuid => ({ puuid, championName: 'Ahri', win: true, kills: 2, deaths: 1, assists: 3 })),
+            participants: [...players, 'outsider'].map(puuid => ({ puuid, championName: 'Ahri', win: true, kills: 2, deaths: 1, assists: 3 })),
         },
     };
 }
@@ -231,4 +231,31 @@ test('enemies load before allies in phase 2, with progress per player', async ()
     assert.deepEqual(order, ['pu-P5', 'pu-P6', 'pu-P7', 'pu-P8', 'pu-P9', 'pu-P0', 'pu-P1', 'pu-P3', 'pu-P4']);
     assert.deepEqual(progress.map(p => p.done), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     assert.ok(progress.every(p => p.total === 10));
+});
+
+test('a 401/403 marks unfinished rows instead of leaving them loading', async () => {
+    const api = fakeApi({
+        getLeagueByPuuid: async (puuid) => { if (puuid === 'pu-P3') throw httpError(403); return { solo: soloEntry, flex: null }; },
+    });
+    const { loader, updates, opts } = setup({ api });
+    await loader.load(makePlayers(), opts);
+    for (let i = 0; i < 10; i++) {
+        const e = updates.get(i);
+        assert.ok(e, `row ${i} got a final update`);
+        assert.match(e.error, /invalid or expired/, `row ${i}`);
+    }
+});
+
+test('phase 2 stores only rows of players in this game', async () => {
+    const { store, loader, opts } = setup();
+    await loader.load(makePlayers(), opts);
+    assert.ok(store.games.size > 0);
+    assert.equal([...store.games.keys()].some(k => k.endsWith('|outsider')), false);
+});
+
+test('your row loads through the API when ownGames is not given (another account)', async () => {
+    const { api, loader, updates, opts } = setup();
+    await loader.load(makePlayers(), { ...opts, ownGames: null });
+    assert.equal(api.log.some(([n, p]) => n === 'getRecentMatchIds' && p === 'pu-P2'), true);
+    assert.equal(updates.get(2).form.games, 2);
 });

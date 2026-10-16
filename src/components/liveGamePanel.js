@@ -16,6 +16,7 @@ const liveGameStore = require('../services/liveGameStore');
 const { createLiveGameLoader } = require('../services/liveGameLoader');
 const { parsePlayers, playerTags, rankSummary, gamesTogether } = require('../services/liveGame');
 const { loadTeammates } = require('../services/matchService');
+const { loadConfig } = require('../services/config');
 const { getChampionIcon, timeAgo, RUNE_ICONS } = require('./matchCard');
 const { tierColor } = require('./rankTiers');
 const { wrTextColor } = require('./winRateColor');
@@ -77,7 +78,7 @@ function rowHtml(p) {
     const entry = state.entries[p.index];
     const icon = p.championId ? getChampionIcon(p.championId) : '';
     const spells = p.spells.filter(Boolean)
-        .map(s => `<img class="live-spell" src="${escapeAttr(`${window.DDRAGON_BASE}/img/spell/${s}.png`)}" alt="">`).join('');
+        .map(s => `<img class="live-spell" src="${escapeAttr(`${window.DDRAGON_BASE}/img/spell/${s}.png`)}" alt="" onerror="this.remove()">`).join('');
     const keystone = RUNE_ICONS[p.keystoneId]
         ? `<img class="live-spell" src="https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/${RUNE_ICONS[p.keystoneId]}" alt="">`
         : '';
@@ -155,6 +156,12 @@ async function loadTogether(gen) {
     }
 }
 
+/** Your stored games are the configured account's: use them only when that's who is playing. */
+function isConfiguredAccount(you) {
+    const { gameName, tagLine } = loadConfig();
+    return !!you && !!gameName && you.riotId.toLowerCase() === `${gameName}#${tagLine || ''}`.toLowerCase();
+}
+
 async function detect() {
     const gen = ++generation;
     const btn = document.getElementById('liveDetectBtn');
@@ -192,7 +199,7 @@ async function detect() {
             if (gen === generation) setStatus(`Recent games: ${done} of ${total} players`);
         },
         isCancelled: () => gen !== generation,
-        ownGames: window.matchesData || [],
+        ownGames: isConfiguredAccount(players.find(p => p.isYou)) ? (window.matchesData || []) : null,
     });
     if (gen !== generation) return;
     if (result.error) setStatus(result.error, true);

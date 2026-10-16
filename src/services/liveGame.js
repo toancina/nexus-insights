@@ -35,10 +35,17 @@ function findChampion(rawChampionName, displayName, champions) {
     return c ? { id: c.id, key: Number(c.key) } : null;
 }
 
-/** "GeneratedTip_SummonerSpell_SummonerFlash_DisplayName" → "SummonerFlash". */
+/**
+ * "GeneratedTip_SummonerSpell_SummonerFlash_DisplayName" → "SummonerFlash".
+ * Upgraded spells (Unleashed Teleport, Smite after its quest) carry a set
+ * prefix and a suffix ("S12_SummonerTeleportUpgrade"); Data Dragon only has
+ * the base icon.
+ */
 function spellId(rawDisplayName) {
     const m = /SummonerSpell_(\w+?)_DisplayName/.exec(rawDisplayName || '');
-    return m ? m[1] : null;
+    if (!m) return null;
+    const id = m[1].replace(/^S\d+_/, '').replace(/Upgrade$/, '');
+    return id.startsWith('SummonerSmite') ? 'SummonerSmite' : id;
 }
 
 /** Riot ID parts, from riotIdGameName/riotIdTagLine or a "name#tag" string. */

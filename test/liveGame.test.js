@@ -237,3 +237,9 @@ test('gamesTogether counts games whose teammate list has that puuid', () => {
     assert.equal(gamesTogether(map, 'z'), 0);
     assert.equal(gamesTogether(null, 'a'), 0);
 });
+
+test('spellId maps upgraded spells to their Data Dragon icon', () => {
+    assert.equal(spellId('GeneratedTip_SummonerSpell_S12_SummonerTeleportUpgrade_DisplayName'), 'SummonerTeleport');
+    assert.equal(spellId('GeneratedTip_SummonerSpell_S5_SummonerSmiteDuel_DisplayName'), 'SummonerSmite');
+    assert.equal(spellId('GeneratedTip_SummonerSpell_S5_SummonerSmitePlayerGanker_DisplayName'), 'SummonerSmite');
+});
