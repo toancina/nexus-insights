@@ -851,3 +851,73 @@ body.has-top-bar .champions-shell { padding-top: var(--gutter); }
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+/* ==========================================================================
+   Coaching habit board (#61): four columns, worst to best
+   ========================================================================== */
+.coach-board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--gutter);
+    margin-bottom: var(--gutter);
+}
+.coach-col {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    padding: 10px;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.coach-col-head {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    padding: 2px 4px 6px;
+    border-bottom: 2px solid var(--col-colour, var(--line-strong));
+    display: flex;
+    justify-content: space-between;
+    cursor: help;
+}
+.coach-col-head span { color: var(--text-tertiary); }
+.coach-col--slipping  { --col-colour: var(--error, #ef4444); }
+.coach-col--needs     { --col-colour: var(--gold); }
+.coach-col--improving { --col-colour: var(--accent-primary); }
+.coach-col--ontrack   { --col-colour: var(--success, #22c55e); }
+.coach-col-empty { color: var(--text-tertiary); font-size: 12px; padding: 4px; }
+
+.coach-ticket {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--col-colour, var(--line-strong));
+    border-radius: var(--r-ctl);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.coach-ticket:hover,
+.coach-ticket:focus-visible { background: rgba(255, 255, 255, 0.07); outline: none; }
+.coach-ticket.open { border-color: var(--col-colour); background: rgba(255, 255, 255, 0.08); }
+.coach-ticket-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.coach-ticket-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+.coach-ticket-meta b { color: var(--text-secondary); }
+.coach-ticket-moved {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--col-colour);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-bottom: 4px;
+}
+.coach-board-note { font-size: 12px; margin: -4px 0 var(--gutter); }
+.coach-ticket-detail { margin-bottom: var(--gutter); }
+
+@media (max-width: 1100px) {
+    .coach-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

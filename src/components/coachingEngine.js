@@ -145,8 +145,7 @@
             // Circular by construction: the flag comes from the win/loss
             // sequence and is then split against that same sequence, so inside
             // a losing run these games are losses by definition. It is kept for
-            // display but never chosen as the focus — see tiltBehaviour() for
-            // the non-circular evidence that actually belongs on the board.
+            // display but never chosen as the focus, nor a Coaching ticket (#61).
             circular: true,
             excludeFromFocus: true,
             rule: 'Two losses in a row means stop. Not one more game.',
@@ -283,55 +282,6 @@
         return metric.lowerIsBetter ? value <= target : value >= target;
     }
 
-    /**
-     * Behavioural evidence for tilt, which the win-rate split cannot provide.
-     *
-     * Splitting "games after two losses" on win rate is circular: inside a
-     * losing run those games are losses by definition. Shuffling the outcomes
-     * does not rescue it either — that tests whether results are streaky, and
-     * streaks have causes other than tilt (matchmaking, opponent quality,
-     * fatigue, playing with a duo). Tilt and streaky matchmaking are
-     * indistinguishable from the win/loss sequence alone.
-     *
-     * What is NOT circular is asking whether the player's own inputs get worse
-     * after two losses. Early deaths and isolated deaths are measured inside
-     * the game and are not derived from the result sequence, so a degradation
-     * there is real evidence about behaviour rather than an artefact.
-     */
-    function tiltBehaviour(rows) {
-        const tilted = rows.filter(r => r._afterTwoLosses);
-        const normal = rows.filter(r => !r._afterTwoLosses);
-        if (tilted.length < MIN_SIDE_SAMPLE || normal.length < MIN_SIDE_SAMPLE) return null;
-
-        const compare = (fn) => {
-            const a = mean(normal.map(fn));
-            const b = mean(tilted.map(fn));
-            return (a === null || b === null) ? null : { normal: a, tilted: b, delta: b - a };
-        };
-
-        const earlyDeaths    = compare(r => num(r.deathsBefore10));
-        const isolatedDeaths = compare(r => num(r.isolatedDeaths));
-        const csAt10         = compare(r => num(r.cs10));
-
-        // "Degraded" means the in-game inputs actually got worse, not merely
-        // that the results did.
-        const worse = [
-            earlyDeaths    && earlyDeaths.delta    > 0.15,
-            isolatedDeaths && isolatedDeaths.delta > 0.15,
-            csAt10         && csAt10.delta         < -3,
-        ].filter(Boolean).length;
-
-        return {
-            games: tilted.length,
-            share: (tilted.length / rows.length) * 100,
-            winRateTilted: winRate(tilted),
-            winRateNormal: winRate(normal),
-            earlyDeaths, isolatedDeaths, csAt10,
-            degraded: worse > 0,
-            degradedCount: worse,
-        };
-    }
-
     /** Split games on the target and measure the win-rate consequence. */
     function evaluateInput(metric, rows, role) {
         if (metric.skipRoles && metric.skipRoles.includes(role)) return null;
@@ -415,9 +365,8 @@
     /**
      * Main entry point.
      * @param {Array} rawRows chronologically ordered matches
-     * @param {object} [opts] { focusId, focusSince } to report progress against
      */
-    function analyse(rawRows, opts = {}) {
+    function analyse(rawRows) {
         const rows = Array.isArray(rawRows) ? rawRows.slice() : [];
         if (rows.length === 0) {
             return { empty: true, sampleSize: 0, role: 'UNKNOWN', focus: null, watch: [], reference: [] };
@@ -454,13 +403,7 @@
         // tells you to work on.
         const focusable = inputs.filter(i => !i.excludeFromFocus);
 
-        // An explicitly chosen focus wins over the computed one, so the board
-        // doesn't change target every time a game is played.
-        let focus = focusable[0] || null;
-        if (opts.focusId) {
-            const pinned = focusable.find(i => i.id === opts.focusId);
-            if (pinned) { focus = pinned; focus.pinned = true; }
-        }
+        const focus = focusable[0] || null;
 
         // Watch list: next best, plus anything actively getting worse.
         const watch = inputs
@@ -475,45 +418,13 @@
             })
             .slice(0, 3);
 
-        const progress = focus ? progressSince(focus, enriched, opts.focusSince) : null;
-
         return {
             empty: false,
             sampleSize: enriched.length,
             role, roleLabel: ROLE_LABEL[role] || role,
             roleShare: roleInfo.share,
-            focus, watch, reference, progress,
-            // Non-circular tilt evidence: do the in-game inputs degrade after
-            // two losses? Shown separately because it is a different kind of
-            // claim from the ranked metrics.
-            tilt: tiltBehaviour(enriched),
+            focus, watch, reference,
             allInputs: inputs,
-        };
-    }
-
-    /** How the focus metric has moved since it was chosen. */
-    function progressSince(focus, rows, since) {
-        if (!since) return null;
-        const metric = METRICS.find(m => m.id === focus.id);
-        if (!metric) return null;
-
-        const before = rows.filter(r => r.gameCreation <  since);
-        const after  = rows.filter(r => r.gameCreation >= since);
-        if (after.length < 5) return { since, games: after.length, tooEarly: true };
-
-        return {
-            since,
-            games: after.length,
-            before: mean(before.map(metric.value)),
-            after:  mean(after.map(metric.value)),
-            winRateSince: winRate(after),
-            winRateBefore: winRate(before),
-            improving: (() => {
-                const b = mean(before.map(metric.value));
-                const a = mean(after.map(metric.value));
-                if (b === null || a === null) return null;
-                return metric.lowerIsBetter ? a < b : a > b;
-            })(),
         };
     }
 

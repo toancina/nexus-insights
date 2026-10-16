@@ -112,7 +112,7 @@ src/
   - LP Progression line charts (Canvas) for Solo/Duo and Flex
   - Time-insight mini-cards: Best Time of Day, Best Day of Week, Session Stamina (games 1-3/4-6/7+), Win/Loss Streaks
   - Match History list (filterable by queue type + champion dropdown), paginated with "Load 20 More / Load All"
-- **Coaching tab**: Solo/Duo only. Rank header, last-game report (‹ › to step back), focus metric with hit/miss dots, area trends with sparklines, collapsed Details. See "Coaching page (rewritten 2026-10)" below.
+- **Coaching tab**: Solo/Duo only. Rank header, last-game report (‹ › to step back), habit board (tickets in Slipping / Needs work / Improving / On track, click for detail), area trends with sparklines, collapsed Details. See "Coaching page (rewritten 2026-10)" below.
 - **Match table**: no Result column (the row colour says win/loss; MVP/SVP sits next to the champion). KDA is (K + A) / max(1, D) everywhere: no "Perfect".
 - **Expanded Match Rows**: clicking a match-table row expands an inline game timeline chart, a game report (#9) (win chance / gold lead / XP lead with event markers) and a full 10-player breakdown (both teams): team impact rank with MVP/SVP, items, runes, summoner spells, KDA, CS/min, damage, GD@15/XPD@15, pings, tower damage. Badge awards shown at the top. (The old full-screen Match Detail Modal was removed 2026-07 — it had become unreachable.)
 - **Setup Modal**: First-run flow — API key (password field), Summoner Name # Tag, Region (select), Platform (select). Accessible anytime via the settings button.
@@ -141,7 +141,7 @@ Each sub-tab renders stat cards benchmarked against rank tiers (Iron → Challen
 ### Coaching Tab
 
 Solo/Duo only; organised around "am I improving game to game?". Sections: rank
-header, game-by-game report, your focus, area trends, details. All numbers come
+header, game-by-game report, habit board, area trends, details. All numbers come
 from `computeTabStats`. Full description: "Coaching page (rewritten 2026-10)" in Notes.
 
 ### Activity Calendar
@@ -1074,9 +1074,22 @@ and re-renders on every open.
 - `plates_taken` and `obj_rate` are still left out of the report. Both were
   wrong until the data-bug fix below; plates could come back now. Control
   wards run above the general scale (6–7/game).
-- `coachingEngine.js` still picks the focus (input vs outcome split,
-  recoverable win rate); its tilt / watch / outcome evidence moved under a
-  collapsed "Details".
+- **Habit board (#61)** replaced "Your focus": `components/coachingBoard.js`
+  (pure, tested) puts one ticket per engine habit (`METRICS` kind 'input',
+  minus the circular `tiltQueue`) in Slipping / Needs work / Improving /
+  On track, left to right, worst to best. Status from hits in the last 10
+  games vs the 10 before: >= 7/10 on track; else was >= 7/10 → slipping;
+  else more hits than before → improving; else needs work; < 5 judged games
+  → "not placed yet". Each game is judged on the target for the role played
+  in it (`markGame`), not the main role. Tickets sort by win rate at stake
+  (`recoverable`). Clicking one opens an inline detail under the board (rule,
+  hit/miss dots, per-role targets, win rate hit vs missed). Statuses are saved
+  as `config.coachingBoardStatus` so a ticket that changed column gets a
+  "from → to" tag on the next visit.
+- **Removed (#61):** pinning a focus (`coachingSetFocus`, `config.coachingFocus`,
+  the engine's `focusId` / `progressSince`) and the tilt check
+  (`tiltBehaviour`). The engine still ranks a `focus` for the Chat tool
+  `get_coaching_focus`. Details now holds only the outcome evidence.
 - Rank in the header = latest `lp_history` reading for 'solo' (no API call).
 - Objectives' sparkline follows `obj_tower`: "Alive for Objectives" sits at
   93–98% for everyone, so it barely moves.

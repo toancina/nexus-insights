@@ -5,9 +5,11 @@
  *
  *   1. Rank header     rank + LP and W-L over the last 10 games
  *   2. Last game       one game vs. your previous 20, with ‹ › to step back
- *   3. Your focus      the one habit coachingEngine picks, hit/missed per game
+ *   3. Habit board     one ticket per habit in Slipping / Needs work /
+ *                      Improving / On track (worst to best), moved by your last
+ *                      10 games vs. the 10 before; click one for its detail (#61)
  *   4. Trends          each Analytics area, last 10 vs. the 10 before
- *   5. Details         tilt, other habits, outcome evidence (collapsed)
+ *   5. Details         outcome evidence (collapsed)
  *
  * Data: the same rows the Analytics page uses (window.matchesData, remakes
  * excluded), and every number comes from the Analytics engine via
@@ -23,6 +25,8 @@
     const { loadConfig, saveConfig } = require('../services/config');
     const Engine   = require('./coachingEngine');
     const Progress = require('./coachingProgress');
+    const Board    = require('./coachingBoard');
+    const { ROLE_NAMES } = require('./roleRanks');
     const { escapeHtml } = require('./dom');
 
     const fmt = (v, dp = 1) => (v === null || v === undefined || Number.isNaN(v))
@@ -32,24 +36,7 @@
     const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
 
     // Page state survives re-renders so ‹ › and "Details" don't reset.
-    const state = { games: [], index: null, lastCount: 0, detailsOpen: false };
-
-    // ── Focus persistence (unchanged) ────────────────────────────────────────
-    function loadFocus() { return loadConfig().coachingFocus || null; }
-
-    window.coachingSetFocus = function (metricId) {
-        const cfg = loadConfig();
-        cfg.coachingFocus = { id: metricId, since: Date.now() };
-        saveConfig(cfg);
-        window.renderCoachingPanel();
-    };
-
-    window.coachingClearFocus = function () {
-        const cfg = loadConfig();
-        delete cfg.coachingFocus;
-        saveConfig(cfg);
-        window.renderCoachingPanel();
-    };
+    const state = { games: [], index: null, lastCount: 0, detailsOpen: false, board: null, moves: {}, openTicket: null };
 
     window.coachingToggleDetails = function () {
         state.detailsOpen = !state.detailsOpen;
@@ -180,81 +167,106 @@
         </div>`;
     }
 
-    // ── 3. Focus ─────────────────────────────────────────────────────────────
-    function renderFocus(focus, progress, role, roleLabel) {
-        if (!focus) {
-            return `<div class="coach-empty">Not enough ranked games yet to pick a focus.</div>`;
-        }
-        const hits = Progress.focusHits(state.games, Engine, focus.id, role);
-        const dp = focus.decimals;
+    // ── 3. Habit board (#61) ─────────────────────────────────────────────────
+    const roleName = r => ROLE_NAMES[r] || 'No role';
 
-        const dots = hits ? hits.dots.map(d => {
+    window.coachingOpenTicket = function (id) {
+        state.openTicket = state.openTicket === id ? null : id;
+        const el = document.getElementById('coachBoard');
+        if (el && state.board) el.innerHTML = renderBoard(state.board, state.moves);
+        const detail = document.getElementById('coachTicketDetail');
+        if (detail) detail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+
+    window.coachingTicketKey = function (event, id) {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.coachingOpenTicket(id); }
+    };
+
+    function compareText(r, b, long) {
+        if (!b) return '';
+        const now = r.hit / r.of, then = b.hit / b.of;
+        const was = long ? `was ${b.hit} of ${b.of} in the 10 before` : `was ${b.hit}/${b.of}`;
+        if (now > then) return `<span class="good">▲ ${was}</span>`;
+        if (now < then) return `<span class="bad">▼ ${was}</span>`;
+        return `<span class="coach-dim">= ${long ? 'same as the 10 before' : 'same'}</span>`;
+    }
+
+    function renderTicket(t, moves) {
+        const move = moves[t.id]
+            ? `<div class="coach-ticket-moved">${escapeHtml(Board.columnLabel(moves[t.id].from))} → ${escapeHtml(Board.columnLabel(moves[t.id].to))}</div>` : '';
+        const open = state.openTicket === t.id;
+        return `
+          <div class="coach-ticket${open ? ' open' : ''}" role="button" tabindex="0" aria-expanded="${open}"
+               onclick="coachingOpenTicket('${escapeHtml(t.id)}')" onkeydown="coachingTicketKey(event, '${escapeHtml(t.id)}')">
+            ${move}
+            <div class="coach-ticket-title">${escapeHtml(t.label)}</div>
+            <div class="coach-ticket-meta"><b>${t.recent.hit}/${t.recent.of}</b> on target ${compareText(t.recent, t.before, false)}</div>
+          </div>`;
+    }
+
+    function renderBoard(board, moves) {
+        if (!board.tickets.length) {
+            return `<div class="coach-empty">Play a few more Solo/Duo games: each habit needs ${Board.MIN_GAMES} judged games before it gets a place on the board.</div>`;
+        }
+        const cols = board.columns.map(c => `
+          <div class="coach-col coach-col--${c.id}">
+            <div class="coach-col-head" title="${escapeHtml(c.hint)}">${escapeHtml(c.label)} <span>${c.tickets.length}</span></div>
+            ${c.tickets.map(t => renderTicket(t, moves)).join('') || '<div class="coach-col-empty">—</div>'}
+          </div>`).join('');
+        const open = state.openTicket && board.tickets.find(t => t.id === state.openTicket);
+        const waiting = board.tooFew.length
+            ? `<div class="coach-dim coach-board-note">Not placed yet (fewer than ${Board.MIN_GAMES} games judged): ${board.tooFew.map(t => escapeHtml(t.label)).join(', ')}</div>` : '';
+        return `<div class="coach-board">${cols}</div>${waiting}${open ? renderTicketDetail(open) : ''}`;
+    }
+
+    function renderTicketDetail(t) {
+        const metric = Engine.METRICS.find(m => m.id === t.id);
+        const dots = metric ? Board.habitDots(metric, Engine._internal.enrich(state.games)) : [];
+        const dp = t.decimals;
+        const dotHtml = dots.map(d => {
             const cls = d.met === null ? 'na' : d.met ? 'hit' : 'miss';
             const val = d.value === null || d.value === undefined ? '—' : fmt(d.value, dp);
-            const tip = `${d.champion} · ${d.win ? 'Win' : 'Loss'} · ${val} ${focus.unit || ''} · ${d.met === null ? 'not measured' : d.met ? 'target hit' : 'target missed'}`;
+            const tip = `${d.champion} (${roleName(d.role)}) · ${d.win ? 'Win' : 'Loss'} · ${val} ${t.unit} · ${d.met === null ? 'not judged' : d.met ? 'target hit' : 'target missed'}`;
             return `<span class="coach-dot ${cls}" title="${escapeHtml(tip)}"></span>`;
-        }).join('') : '';
+        }).join('');
 
-        let hitLine = '';
-        if (hits && hits.recent) {
-            const now = `Hit in <b>${hits.recent.hit} of your last ${hits.recent.of}</b> games`;
-            let cmp = '';
-            if (hits.before) {
-                const a = hits.recent.hit / hits.recent.of, b = hits.before.hit / hits.before.of;
-                const cls = a > b ? 'good' : a < b ? 'bad' : '';
-                const arrow = a > b ? '▲' : a < b ? '▼' : '=';
-                cmp = ` <span class="${cls}">${arrow} was ${hits.before.hit} of ${hits.before.of} before</span>`;
+        // The target for each role you played in these games
+        const targets = [];
+        if (!t.binary) {
+            const seen = new Set();
+            for (const d of dots) {
+                if (d.target === null || d.target === undefined || seen.has(d.role)) continue;
+                seen.add(d.role);
+                targets.push(`${escapeHtml(roleName(d.role))} ${fmt(d.target, dp)}`);
             }
-            hitLine = now + cmp;
         }
-
-        const target = focus.binary ? '' : `${escapeHtml(roleLabel)} target: ${fmt(hits ? hits.target : focus.target, dp)} ${escapeHtml(focus.unit || '')}`;
-
-        const metShare = 100 - focus.failureRate;
-        const evidence = (focus.wrMet !== null && focus.wrMissed !== null)
-            ? `<b>Why this one?</b> You managed it in ${pct(metShare)} of your ${focus.sampleSize} games and won
-               <b class="good">${pct(focus.wrMet)}</b> of those. In the other ${pct(focus.failureRate)} you won only
-               <b class="bad">${pct(focus.wrMissed)}</b>.${focus.confident ? '' : ' <span class="coach-dim">The gap is small for the number of games, so treat it as a hint.</span>'}`
+        const stake = (t.wrMet !== null && t.wrMissed !== null)
+            ? `<b>Why it matters:</b> in your ${t.sampleSize} Solo/Duo games you won <b class="good">${pct(t.wrMet)}</b> when you hit it
+               and <b class="bad">${pct(t.wrMissed)}</b> when you missed it.${t.confident ? '' : ' <span class="coach-dim">The gap is small for the number of games, so treat it as a hint.</span>'}`
             : '';
-
-        let since = '';
-        if (progress && !progress.tooEarly) {
-            const better = progress.improving;
-            const move = focus.binary
-                ? `${pct(progress.before * 100)} → ${pct(progress.after * 100)}`
-                : `${fmt(progress.before, dp)} → ${fmt(progress.after, dp)}`;
-            since = `<div class="coach-since">Since you committed on ${new Date(progress.since).toLocaleDateString()}:
-                       <b class="${better ? 'good' : 'bad'}">${move}</b> over ${progress.games} games</div>`;
-        } else if (progress && progress.tooEarly) {
-            since = `<div class="coach-since coach-dim">Committed ${new Date(progress.since).toLocaleDateString()} —
-                       ${progress.games} game${progress.games === 1 ? '' : 's'} so far.</div>`;
-        }
-
+        const status = Board.COLUMNS.find(c => c.id === t.status);
+        const sub = [status ? `${escapeHtml(status.label)}: ${escapeHtml(status.hint)}` : '',
+                     targets.length ? `Target: ${targets.join(' · ')} ${escapeHtml(t.unit)}` : ''].filter(Boolean).join(' · ');
         return `
-        <div class="coach-focus">
+        <div class="coach-focus coach-ticket-detail" id="coachTicketDetail">
           <div class="coach-focus-top">
             <div>
-              <div class="coach-focus-title">${escapeHtml(focus.label)}</div>
-              <div class="coach-focus-sub">${target}</div>
+              <div class="coach-focus-title">${escapeHtml(t.label)}</div>
+              <div class="coach-focus-sub">${sub}</div>
             </div>
-            ${focus.pinned
-                ? `<button class="coach-btn" onclick="coachingClearFocus()">Let the app choose</button>`
-                : `<button class="coach-btn" onclick="coachingSetFocus('${escapeHtml(focus.id)}')">Commit to this</button>`}
+            <button class="coach-btn" onclick="coachingOpenTicket('${escapeHtml(t.id)}')">Close</button>
           </div>
-
           <div class="coach-rule">
             <div class="coach-rule-label">The rule</div>
-            <div class="coach-rule-text">${escapeHtml(focus.rule || '')}</div>
+            <div class="coach-rule-text">${escapeHtml(t.rule)}</div>
           </div>
-
           <div class="coach-dots-row">
-            <div class="coach-dots" aria-label="Last 10 games, oldest to newest">${dots}</div>
-            <div class="coach-dots-text">${hitLine}</div>
+            <div class="coach-dots" aria-label="Last 10 games, oldest to newest">${dotHtml}</div>
+            <div class="coach-dots-text">Hit in <b>${t.recent.hit} of your last ${t.recent.of}</b> games ${compareText(t.recent, t.before, true)}</div>
           </div>
-          <div class="coach-dots-legend coach-dim">Last 10 games, oldest → newest ·
+          <div class="coach-dots-legend coach-dim">Last 10 games, oldest → newest · each judged on the target for the role you played ·
             <span class="coach-dot hit"></span> hit <span class="coach-dot miss"></span> missed</div>
-          ${since}
-          <p class="coach-evidence">${evidence}</p>
+          <p class="coach-evidence">${stake}</p>
         </div>`;
     }
 
@@ -356,44 +368,6 @@
     }
 
     // ── 5. Details ───────────────────────────────────────────────────────────
-    function renderTilt(tilt) {
-        if (!tilt) return '';
-        if (!tilt.degraded) {
-            return `<div class="coach-note">
-              After two losses in a row you play <b>${tilt.games}</b> more games
-              (${pct(tilt.share)} of your total), and your habits hold up — early and
-              solo deaths stay flat. That looks like normal ups and downs rather than tilt.</div>`;
-        }
-        const bits = [];
-        if (tilt.earlyDeaths && tilt.earlyDeaths.delta > 0.15) bits.push(`early deaths ${fmt(tilt.earlyDeaths.normal)} → <b class="bad">${fmt(tilt.earlyDeaths.tilted)}</b>`);
-        if (tilt.isolatedDeaths && tilt.isolatedDeaths.delta > 0.15) bits.push(`dying alone ${fmt(tilt.isolatedDeaths.normal)} → <b class="bad">${fmt(tilt.isolatedDeaths.tilted)}</b>`);
-        if (tilt.csAt10 && tilt.csAt10.delta < -3) bits.push(`CS@10 ${fmt(tilt.csAt10.normal, 0)} → <b class="bad">${fmt(tilt.csAt10.tilted, 0)}</b>`);
-        return `<div class="coach-note warn">
-          <b>You play worse after two losses in a row.</b> Across ${tilt.games} such games:
-          ${bits.join(', ')}. That's a change in how you play, not just in results —
-          the best reason to stop after two.</div>`;
-    }
-
-    function renderOtherHabits(watch) {
-        if (!watch || !watch.length) return '';
-        const rows = watch.map(w => {
-            const value = w.binary ? pct(w.failureRate) + ' of games' : `${fmt(w.current, w.decimals)} ${escapeHtml(w.unit || '')}`;
-            let note = '', cls = 'coach-dim';
-            if (w.trend && w.trend.improving !== null && w.trend.improving !== undefined) {
-                cls = w.trend.improving ? 'good' : 'bad';
-                note = w.trend.improving ? '▲ getting better' : '▼ getting worse';
-            } else if (w.trend && w.trend.flat) note = 'steady';
-            return `
-            <div class="coach-watch-row" title="${escapeHtml(w.rule || '')}">
-              <span class="coach-watch-label">${escapeHtml(w.label)}</span>
-              <span class="coach-watch-value">${value}</span>
-              <span class="coach-watch-note ${cls}">${note}</span>
-              <button class="coach-mini-btn" onclick="coachingSetFocus('${escapeHtml(w.id)}')">Focus on this</button>
-            </div>`;
-        }).join('');
-        return `<div class="coach-subhead">Other habits worth watching</div><div class="coach-watch">${rows}</div>`;
-    }
-
     function renderEvidence(reference, n) {
         if (!reference || !reference.length) return '';
         const rows = reference.map(r => `
@@ -412,8 +386,6 @@
           <button class="coach-mini-btn" id="coachDetailsToggle" onclick="coachingToggleDetails()">${state.detailsOpen ? 'Hide' : 'Show'}</button>
         </div>
         <div class="coach-details ${state.detailsOpen ? '' : 'collapsed'}" id="coachDetailsBody">
-          ${renderTilt(result.tilt)}
-          ${renderOtherHabits(result.watch)}
           ${renderEvidence(result.reference, result.sampleSize)}
         </div>`;
     }
@@ -452,11 +424,17 @@
             state.games = games;
             state.lastCount = games.length;
 
-            const pref = loadFocus();
-            const result = Engine.analyse(games, {
-                focusId:    pref ? pref.id : null,
-                focusSince: pref ? pref.since : null,
-            });
+            const result = Engine.analyse(games);
+
+            // Habit board: statuses now, and which tickets moved since last visit
+            const board = Board.buildBoard(games, Engine, result.allInputs);
+            const cfg = loadConfig();
+            state.moves = Board.movesSince(cfg.coachingBoardStatus, board.tickets);
+            state.board = board;
+            if (state.openTicket && !board.tickets.some(t => t.id === state.openTicket)) state.openTicket = null;
+            cfg.coachingBoardStatus = Board.statusMap(board.tickets);
+            delete cfg.coachingFocus;          // pinning is gone (#61)
+            saveConfig(cfg);
 
             let reading = null;
             try {
@@ -472,8 +450,8 @@
               <div class="coach-section-label">Game by game</div>
               ${renderReport()}
 
-              <div class="coach-section-label">Your focus <span class="coach-dim">— one habit at a time</span></div>
-              ${renderFocus(result.focus, result.progress, result.role, result.roleLabel)}
+              <div class="coach-section-label">Your habits <span class="coach-dim">— worst to best, from your last 10 games vs. the 10 before · click one for details</span></div>
+              <div id="coachBoard">${renderBoard(board, state.moves)}</div>
 
               <div class="coach-section-label">Trends <span class="coach-dim">— last 10 games vs. the 10 before, or flip a switch for all your Solo/Duo games · click one to open it in Analytics</span></div>
               <div id="coachTrends">${renderTrends(areas)}</div>
