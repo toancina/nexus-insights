@@ -10,8 +10,10 @@ const { deathsFromTimeline, encodeDeaths } = require('./deathMap');
 const { platesTakenBy, deadWindows, isDeadAt } = require('./timelineRules');
 const { oldestFirst, shouldStopSync, seasonStart } = require('./syncOrder');
 
-// Only sync these queue types (Ranked Solo, Ranked Flex, Normal)
-const ALLOWED_QUEUES = new Set([420, 440, 400, 430, 480, 490, 700]);
+// Only sync these queue types (Ranked Solo, Ranked Flex, Ranked Premade, Normal).
+// 710 is the 5-stack ranked queue (League-V4 RANKED_PREMADE_5x5, its own LP);
+// Riot's queues.json doesn't list it, so check real games when adding a queue.
+const ALLOWED_QUEUES = new Set([420, 440, 710, 400, 430, 480, 490, 700]);
 
 // Rate limiting is handled centrally by the limiter inside riotApi.js, which
 // enforces BOTH of Riot's windows (20/sec and 100/2min) and retries on 429.

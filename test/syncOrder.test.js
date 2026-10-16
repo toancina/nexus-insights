@@ -44,7 +44,7 @@ const HOUR = 3600_000;
 /** 30 games on Riot's side, one an hour. */
 const RIOT_GAMES = Array.from({ length: 30 }, (_, i) => ({ id: `EUW1_${5000 + i}`, at: T0 + i * HOUR }));
 
-function fakeMatch({ id, at }) {
+function fakeMatch({ id, at, queue = 420 }) {
     const player = (n, teamId) => ({
         puuid: n === 0 ? PUUID : `p${n}`, participantId: n + 1, teamId,
         championName: n === 0 ? 'Ahri' : `Champ${n}`, champLevel: 15, win: teamId === 100,
@@ -56,7 +56,7 @@ function fakeMatch({ id, at }) {
     return {
         metadata: { matchId: id },
         info: {
-            queueId: 420, gameCreation: at, gameDuration: 1800,
+            queueId: queue, gameCreation: at, gameDuration: 1800,
             participants: Array.from({ length: 10 }, (_, n) => player(n, n < 5 ? 100 : 200)),
             teams: [{ teamId: 100, objectives: {} }, { teamId: 200, objectives: {} }],
         },
@@ -96,10 +96,9 @@ stubModule('services/database.js', {
 let keyWorksFor = Infinity;   // match fetches left before the key "expires"
 let missingGame = null;       // a game Riot answers 404 for
 stubModule('services/riotApi.js', {
-    // Like Riot: only games after startTime, newest first
+    // Like Riot: only this queue's games after startTime, newest first
     async getMatchIds(puuid, startTime, queue) {
-        if (queue !== 420) return [];
-        return RIOT_GAMES.filter(g => g.at >= startTime).map(g => g.id).reverse();
+        return RIOT_GAMES.filter(g => (g.queue ?? 420) === queue && g.at >= startTime).map(g => g.id).reverse();
     },
     async getMatchData(id) {
         if (keyWorksFor <= 0) throw Object.assign(new Error('expired'), { isAxiosError: true, response: { status: 403 } });
@@ -135,6 +134,20 @@ test('a game Riot no longer has is skipped, not a reason to stop', async () => {
     missingGame = null;
     assert.equal(result.newMatches, 29);
     assert.equal(stored.has(RIOT_GAMES[3].id), false);
+});
+
+test('a Ranked Premade game (queue 710, missing from Riot\'s queues.json) is synced', async () => {
+    stored.clear();
+    keyWorksFor = Infinity;
+    for (const g of RIOT_GAMES) stored.set(g.id, { gameCreation: g.at });
+    const premade = { id: 'EUW1_6000', at: T0 + 40 * HOUR, queue: 710 };
+    RIOT_GAMES.push(premade);
+    try {
+        assert.equal((await syncMatches(PUUID)).newMatches, 1);
+        assert.equal(stored.has(premade.id), true);
+    } finally {
+        RIOT_GAMES.pop();
+    }
 });
 
 // ---------------------------------------------------------------------------

@@ -43,7 +43,7 @@ const db = new DatabaseSync(dbPath, { readOnly: true });
 const q  = (sql, ...p) => db.prepare(sql).all(...p);
 const one = (sql, ...p) => db.prepare(sql).get(...p);
 
-const QUEUE = { 420: 'Ranked Solo/Duo', 440: 'Ranked Flex', 400: 'Normal Draft',
+const QUEUE = { 420: 'Ranked Solo/Duo', 440: 'Ranked Flex', 710: 'Ranked Premade', 400: 'Normal Draft',
                 430: 'Blind', 480: 'Swiftplay', 490: 'Quickplay', 700: 'Clash' };
 const ALLOWED = new Set(Object.keys(QUEUE).map(Number));
 

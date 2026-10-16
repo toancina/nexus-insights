@@ -56,7 +56,7 @@ let DatabaseSync;
 try { ({ DatabaseSync } = require('node:sqlite')); }
 catch { console.error('Needs Node 22.5+ (built-in node:sqlite). Yours: ' + process.version); process.exit(1); }
 
-const QUEUE = { 420: 'Ranked Solo/Duo', 440: 'Ranked Flex', 400: 'Normal Draft',
+const QUEUE = { 420: 'Ranked Solo/Duo', 440: 'Ranked Flex', 710: 'Ranked Premade', 400: 'Normal Draft',
                 430: 'Blind', 480: 'Swiftplay', 490: 'Quickplay', 700: 'Clash' };
 
 const when = ms => new Date(ms).toLocaleString();

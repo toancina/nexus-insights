@@ -157,7 +157,7 @@ from `computeTabStats`. Full description: "Coaching page (rewritten 2026-10)" in
 ### Match History
 
 - Cards list, newest first, showing: champion icon, position, mode, result (Win/Loss), KDA, CS, damage, vision, items strip, time ago
-- Filters: queue type checkboxes (Ranked Solo, Ranked Flex, Normal) + champion dropdown
+- Filters: queue type checkboxes (Ranked Solo, Ranked Flex, Premade, Normal) + champion dropdown
 - Pagination: 50 shown initially, "Load 20 More" or "Load All" buttons
 - Click any row → expands the inline 10-player breakdown
 
@@ -240,7 +240,7 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
   every player in every new game (~12,000 calls, ~4 h on a dev key for a
   1,740-game first sync) and nothing read them. Removed; the `player_ranks`
   table stays. If ranks are shown later, fetch them when a game is opened
-- **Queue filter**: Only stores 420 (Solo), 440 (Flex), 400 (Normal Draft), 430 (Blind), 480 (Swiftplay), 490 (Quickplay), 700 (Clash)
+- **Queue filter**: Only stores 420 (Solo), 440 (Flex), 710 (Ranked Premade: the 5-stack ranked queue, League-V4 `RANKED_PREMADE_5x5`; not in Riot's queues.json), 400 (Normal Draft), 430 (Blind), 480 (Swiftplay), 490 (Quickplay), 700 (Clash)
 - **Rate limiting**: Sequential processing, 150ms delay between every API call
 - **Timestamp format**: the app stores **milliseconds** (`gameCreation`, 13 digits) everywhere, and `riotApi.getMatchIds()` converts to **seconds** (`Math.floor(ms / 1000)`) for Match-V5's `startTime`, which Riot defines in seconds. Pass `getMatchIds` milliseconds; don't remove the conversion (#41: this note used to say Riot takes milliseconds)
 

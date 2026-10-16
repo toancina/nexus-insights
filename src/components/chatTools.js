@@ -20,11 +20,12 @@ const QUEUES = {
     solo:   [420],
     flex:   [440],
     ranked: [420, 440],
+    premade: [710],
     normal: [400, 430, 480, 490, 700],
 };
 
 const QUEUE_LABEL = {
-    420: 'Ranked Solo', 440: 'Ranked Flex', 400: 'Normal Draft', 430: 'Normal Blind',
+    420: 'Ranked Solo', 440: 'Ranked Flex', 710: 'Ranked Premade', 400: 'Normal Draft', 430: 'Normal Blind',
     480: 'Swiftplay', 490: 'Quickplay', 700: 'Clash',
 };
 
@@ -100,9 +101,9 @@ function applyFilters(all, args = {}) {
     const queue = String(args.queue || 'all').toLowerCase();
     if (queue !== 'all') {
         const ids = QUEUES[queue];
-        if (!ids) return { error: `Unknown queue "${args.queue}". Use all, solo, flex, ranked or normal.` };
+        if (!ids) return { error: `Unknown queue "${args.queue}". Use all, solo, flex, ranked, premade or normal.` };
         list = list.filter(m => ids.includes(m.queueId));
-        parts.push({ solo: 'Ranked Solo/Duo', flex: 'Ranked Flex', ranked: 'Ranked (Solo + Flex)', normal: 'Normal games' }[queue]);
+        parts.push({ solo: 'Ranked Solo/Duo', flex: 'Ranked Flex', ranked: 'Ranked (Solo + Flex)', premade: 'Ranked Premade (5-stack)', normal: 'Normal games' }[queue]);
     }
 
     if (args.champion) {
@@ -220,8 +221,8 @@ function resolveStat(name, ctx, matches) {
 // ---------------------------------------------------------------------------
 
 const FILTER_PROPS = {
-    queue: { type: 'string', enum: ['all', 'solo', 'flex', 'ranked', 'normal'],
-             description: 'Which games: all, solo (Ranked Solo/Duo), flex (Ranked Flex), ranked (both), normal. Default all.' },
+    queue: { type: 'string', enum: ['all', 'solo', 'flex', 'ranked', 'premade', 'normal'],
+             description: 'Which games: all, solo (Ranked Solo/Duo), flex (Ranked Flex), ranked (Solo + Flex), premade (Ranked Premade, 5-stack), normal. Default all.' },
     champion: { type: 'string', description: 'Only games on this champion, e.g. "Ahri".' },
     role: { type: 'string', enum: ['top', 'jungle', 'mid', 'adc', 'support'], description: 'Only games in this role.' },
     since: { type: 'string', description: 'Start date YYYY-MM-DD (inclusive).' },

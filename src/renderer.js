@@ -70,6 +70,7 @@ window.excludeRemakes = (list) => (list || []).filter(m => !window.isRemake(m));
 window.DDRAGON_BASE        = getDDragonBase();   // fallback until loadGameData() picks the current version
 window.QUEUE_NAMES         = {
     420: 'Ranked Solo',  440: 'Ranked Flex',
+    710: 'Ranked Premade',
     400: 'Normal Draft', 430: 'Normal Blind',
     480: 'Swiftplay',   490: 'Quickplay',
     700: 'Clash'
