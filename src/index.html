@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="styles/toast.css">
 </head>
 
-<body>
+<body class="has-top-bar"><!-- Analytics is the first page; switchTopTab keeps this class in step (#52) -->
     <!-- Background orbs removed -->
 
     <!-- Custom title bar — replaces the native frame. The whole strip is a
@@ -74,111 +74,122 @@
         </button>
     </nav>
 
+    <!-- Shared top bar (#52): Riot ID, Sync and the filters, on every page they
+         apply to (Analytics, Match History, Champions, Allies) and pinned under
+         the title bar while the page scrolls. switchTopTab shows or hides it.
+         Element ids are unchanged, so filtersPanel, periodFilter, syncPanel and
+         renderFilteredMatches work as before. -->
+    <header class="top-bar" id="topBar">
+        <div class="top-bar-card">
+            <!-- Input Group — the summoner fields no longer stretch, which
+                 leaves room for the game-mode filters on the same line.
+                 Those filters drive the analytics cards, Time Analytics and
+                 the Match History page, which is why they live here. -->
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <!-- Labels are sr-only: nothing else on this row is
+                         labelled, and the placeholders already say what the
+                         fields are. Screen readers still get the name. -->
+                    <label class="sr-only" for="gameName">Summoner Name</label>
+                    <input type="text" id="gameName" class="input-field" placeholder="Summoner Name">
+                </div>
+                <div class="input-separator">#</div>
+                <div class="input-wrapper tag-input">
+                    <label class="sr-only" for="tagLine">Tag</label>
+                    <input type="text" id="tagLine" class="input-field" placeholder="Tag">
+                </div>
+
+                <!-- Sync Button -->
+                <button id="syncBtn" class="sync-btn" onclick="handleSync()">
+                    <span class="btn-icon">&#8635;</span>
+                    <span class="btn-text">Sync Matches</span>
+                </button>
+
+                <div class="filter-inline" id="filterSection" style="display: none;">
+                    <span class="sr-only" id="gameModesLabel">Game Modes</span>
+                    <div class="filter-options" role="group" aria-labelledby="gameModesLabel">
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-all" checked onchange="toggleAllFilters()">
+                            <span>All</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="420" checked
+                                onchange="applyFilters()">
+                            <span>Solo/Duo</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="440" checked
+                                onchange="applyFilters()">
+                            <span>Flex</span>
+                        </label>
+                        <label class="filter-checkbox" title="Ranked Premade: the 5-stack ranked queue">
+                            <input type="checkbox" class="queue-filter" data-queue="710" checked
+                                onchange="applyFilters()">
+                            <span>Premade</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" class="queue-filter" data-queue="400,430,480,490,700" checked
+                                onchange="applyFilters()">
+                            <span>Normal</span>
+                        </label>
+                        <button class="filter-clear-btn" onclick="clearGameModeFilters()"
+                            title="Clear all game modes">Clear</button>
+                    </div>
+                    <div class="champ-filter-wrapper period-filter-wrapper">
+                        <select id="periodFilter" onchange="applyFilters()" aria-label="Filter by patch or time"
+                                title="Only games from these patches, or from this time window">
+                            <option value="">All time</option>
+                        </select>
+                    </div>
+                    <div class="champ-filter-wrapper">
+                        <select id="champFilter" onchange="applyFilters()" aria-label="Filter by champion">
+                            <option value="">All Champions</option>
+                            <option value="__none__">None (Clear Filter)</option>
+                        </select>
+                    </div>
+                    <div class="champ-filter-wrapper role-filter-wrapper">
+                        <select id="roleFilter" onchange="applyFilters()" aria-label="Filter by role">
+                            <option value="">All roles</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-header">
+                    <span class="progress-label">Syncing matches...</span>
+                    <span class="progress-count" id="progressCount">0 / 0</span>
+                </div>
+                <div class="progress-bar" role="progressbar" aria-labelledby="progressCount">
+                    <div class="progress-fill animated" id="progressFill"></div>
+                </div>
+                <div class="progress-details" id="progressDetails" style="display: none;">
+                    <span class="progress-detail-new">✓ <span id="progressNew">0</span> new</span> •
+                    <span class="progress-detail-filtered">⊘ <span id="progressFiltered">0</span> filtered</span> •
+                    <span class="progress-detail-existing">↷ <span id="progressExisting">0</span> existing</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Toast: page level, so it shows on every page (it used to sit inside
+         the Analytics page and was hidden with it) -->
+    <!-- Toast Notification -->
+    <div class="toast-notification" id="toastNotification">
+        <div class="toast-content">
+            <div class="toast-title" id="toastTitle">Ready</div>
+            <div class="toast-message" id="toastMessage"></div>
+        </div>
+        <div class="toast-close" onclick="hideToast()">×</div>
+    </div>
+
     <div class="app-container">
 
         <!-- Analytics Tab Content -->
         <div id="analytics-tab">
             <!-- Main Card -->
             <div class="main-card">
-                <!-- Input Group — the summoner fields no longer stretch, which
-                     leaves room for the game-mode filters on the same line.
-                     Those filters drive the analytics cards, Time Analytics and
-                     the Match History page, which is why they live here. -->
-                <div class="input-group">
-                    <div class="input-wrapper">
-                        <!-- Labels are sr-only: nothing else on this row is
-                             labelled, and the placeholders already say what the
-                             fields are. Screen readers still get the name. -->
-                        <label class="sr-only" for="gameName">Summoner Name</label>
-                        <input type="text" id="gameName" class="input-field" placeholder="Summoner Name">
-                    </div>
-                    <div class="input-separator">#</div>
-                    <div class="input-wrapper tag-input">
-                        <label class="sr-only" for="tagLine">Tag</label>
-                        <input type="text" id="tagLine" class="input-field" placeholder="Tag">
-                    </div>
-
-                    <!-- Sync Button -->
-                    <button id="syncBtn" class="sync-btn" onclick="handleSync()">
-                        <span class="btn-icon">&#8635;</span>
-                        <span class="btn-text">Sync Matches</span>
-                    </button>
-
-                    <div class="filter-inline" id="filterSection" style="display: none;">
-                        <span class="sr-only" id="gameModesLabel">Game Modes</span>
-                        <div class="filter-options" role="group" aria-labelledby="gameModesLabel">
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-all" checked onchange="toggleAllFilters()">
-                                <span>All</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" class="queue-filter" data-queue="420" checked
-                                    onchange="applyFilters()">
-                                <span>Solo/Duo</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" class="queue-filter" data-queue="440" checked
-                                    onchange="applyFilters()">
-                                <span>Flex</span>
-                            </label>
-                            <label class="filter-checkbox" title="Ranked Premade: the 5-stack ranked queue">
-                                <input type="checkbox" class="queue-filter" data-queue="710" checked
-                                    onchange="applyFilters()">
-                                <span>Premade</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" class="queue-filter" data-queue="400,430,480,490,700" checked
-                                    onchange="applyFilters()">
-                                <span>Normal</span>
-                            </label>
-                            <button class="filter-clear-btn" onclick="clearGameModeFilters()"
-                                title="Clear all game modes">Clear</button>
-                        </div>
-                        <div class="champ-filter-wrapper period-filter-wrapper">
-                            <select id="periodFilter" onchange="applyFilters()" aria-label="Filter by patch or time"
-                                    title="Only games from these patches, or from this time window">
-                                <option value="">All time</option>
-                            </select>
-                        </div>
-                        <div class="champ-filter-wrapper">
-                            <select id="champFilter" onchange="applyFilters()" aria-label="Filter by champion">
-                                <option value="">All Champions</option>
-                                <option value="__none__">None (Clear Filter)</option>
-                            </select>
-                        </div>
-                        <div class="champ-filter-wrapper role-filter-wrapper">
-                            <select id="roleFilter" onchange="applyFilters()" aria-label="Filter by role">
-                                <option value="">All roles</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Toast Notification -->
-                <div class="toast-notification" id="toastNotification">
-                    <div class="toast-content">
-                        <div class="toast-title" id="toastTitle">Ready</div>
-                        <div class="toast-message" id="toastMessage"></div>
-                    </div>
-                    <div class="toast-close" onclick="hideToast()">×</div>
-                </div>
-
-                <!-- Progress Bar -->
-                <div class="progress-container" id="progressContainer">
-                    <div class="progress-header">
-                        <span class="progress-label">Syncing matches...</span>
-                        <span class="progress-count" id="progressCount">0 / 0</span>
-                    </div>
-                    <div class="progress-bar" role="progressbar" aria-labelledby="progressCount">
-                        <div class="progress-fill animated" id="progressFill"></div>
-                    </div>
-                    <div class="progress-details" id="progressDetails" style="display: none;">
-                        <span class="progress-detail-new">✓ <span id="progressNew">0</span> new</span> •
-                        <span class="progress-detail-filtered">⊘ <span id="progressFiltered">0</span> filtered</span> •
-                        <span class="progress-detail-existing">↷ <span id="progressExisting">0</span> existing</span>
-                    </div>
-                </div>
-
                 <!-- Analytical Tabs & Cards -->
                 <div class="unified-stats-section" id="unifiedStatsSection" style="display: none;">
                     

@@ -101,8 +101,7 @@ src/
 - **Title bar**: Nexus logo + name on the left, ⟳ update button and ⚙ settings (SVG) top-right
 - **Left nav rail** (always visible): Analytics (default), Match History, Champions, Allies (the Teammates page; the full word wraps in the 78px rail), Coaching, Chat, Skins
 - **Analytics tab**:
-  - Summoner Name # Tag input + "Sync Matches" button at the top
-  - Progress bar with new/filtered/existing counters during sync
+  - The **shared top bar** (#52) above the page: Summoner Name # Tag, "Sync Matches", game-mode / period / champion / role filters, and the sync progress bar. Shown on Analytics, Match History, Champions and Allies, pinned under the title bar while scrolling
   - 9 analytical sub-tabs (pill-button row): Overview · Lane Phase · Combat · Death Review · Objectives · Vision · Economy · Macro · Consistency
   - Stat cards grid below the sub-tabs — each card shows value, rank benchmark colour, and a trend arrow vs. the previous period
   - Ranked Solo/Duo and Ranked Flex cards (rank emblem image + tier text + W-L-WR%)
@@ -861,6 +860,23 @@ Under the Lane Phase cards: average gold and XP minus your lane opponent's
 - `test/advancedStats.test.js` (#14) covers `computeAdvancedStatsForMatch`
   on a hand-built game: @15 diffs, CS@10/15/20, early/isolated deaths,
   shutdowns, objective rate, shares, remakes, short games, no timeline.
+
+### Shared top bar (#52) — 2026-10
+
+- `#topBar` (`header.top-bar` in index.html) sits outside the pages and holds
+  the Riot ID inputs, `#syncBtn`, `#filterSection` (game modes, period,
+  champion, role) and `#progressContainer`. Ids are unchanged, so
+  filtersPanel / periodFilter / syncPanel / renderFilteredMatches didn't move.
+- `switchTopTab` → `updateTopBar(tab)` (renderer.js) toggles
+  `body.has-top-bar` for `TOP_BAR_PAGES` (analytics, history, champions,
+  teammates) and disables `#champFilter` / `#roleFilter` with an explaining
+  title on Champions and Allies, which ignore them. `<body>` starts with the
+  class, since Analytics is the first page.
+- polish.css: `.top-bar` is `position: sticky; top: var(--titlebar-height)`
+  (the window scrolls; Match History scrolls inside its own table), and pages
+  under it drop the title-bar part of their top padding.
+- The toast moved to page level too: inside `#analytics-tab` it was hidden on
+  every other page.
 
 ### Left nav rail — 2026-10
 
