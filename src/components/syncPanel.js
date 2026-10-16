@@ -239,7 +239,7 @@ window.handleSync = async function (options = {}) {
         return { newMatches: result.newMatches || 0 };
 
     } catch (err) {
-        console.error('Sync error:', err);
+        console.error('Sync error:', err.message);
         hideProgress();
 
         let errorMessage = err.message;

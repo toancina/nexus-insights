@@ -925,7 +925,7 @@ async function getLeagueData(puuid) {
         const leagueData = await require('./riotApi').getLeagueByPuuid(puuid);
         return leagueData;
     } catch (error) {
-        console.error('Error fetching league data:', error);
+        console.error('Error fetching league data:', error.message);
         return { solo: null, flex: null };
     }
 }
