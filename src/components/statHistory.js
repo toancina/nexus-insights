@@ -406,8 +406,9 @@ function renderPanel() {
         tabName: state.tab,
         statId: state.statId,
         matches: state.matches,
-        // Same role as the cards, so a month's tier matches the card's (#10)
-        computeTabStats: (tab, ms, prev) => window.computeTabStats(tab, ms, prev, { role: window.analyticsRoleFilter || null }),
+        // Same rule as the cards (role filter, role-weighted ranks), so a
+        // month's tier matches the card's (#10, #56)
+        computeTabStats: (tab, ms, prev) => window.computeTabStats(tab, ms, prev, { role: window.analyticsRoleFilter || null, roleWeighted: true }),
     });
 
     const h   = state.history;
@@ -423,8 +424,11 @@ function renderPanel() {
 function redraw() {
     const canvas = $('statHistoryCanvas');
     if (!canvas || !state.history) return;
-    const thresholds = typeof window.getStatBenchmark === 'function'
-        ? window.getStatBenchmark(state.statId, window.analyticsRoleFilter || null) : null;
+    // Rank bands need one ladder, so only with one role picked: across roles
+    // each role has its own ladder and the dots carry the combined tier (#56)
+    const role = window.analyticsRoleFilter || null;
+    const thresholds = role && typeof window.getStatBenchmark === 'function'
+        ? window.getStatBenchmark(state.statId, role) : null;
     state.geometry = drawChart(canvas, state.history, thresholds, state.hoverIndex);
 }
 

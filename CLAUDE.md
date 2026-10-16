@@ -262,6 +262,22 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 
 ### Analytics Engine — Rank Benchmark System
 - Every stat card is benchmarked against 10 rank tiers (Iron → Challenger) using `STAT_BENCHMARKS` thresholds in `analyticsEngine.js`
+- **Role-weighted badges (#56):** the Analytics cards (and the stat-history
+  chart) call `computeTabStats(..., { roleWeighted: true })`. Each role's games
+  are computed on their own and scored on that role's ladder
+  (`components/roleRanks.js`, pure, tested: Iron 0 … Challenger 9,
+  continuous), the scores are averaged weighted by games, and that tier is the
+  badge. `card.roleBreakdown` feeds the card tooltip ("By role: Mid 1.3 Gold
+  (419) · …"). `NOT_APPLICABLE` drops a role's games from a stat entirely
+  (plates for jungle/support, CS and lane-farm stats for support); with none
+  left, or a single-role filter on such a role, the card shows "--". Role
+  ladders: `roleBenchmarks.js` overrides, then `ALIASES` (eco_cs_min →
+  avg_csm, kp_combat → avg_kp), then `ROLE_SCALE` (general ladder × factor,
+  measured per-role ratios: support damage 0.6×, gold 0.76×, vision 2.3×;
+  laners damage 1.15×, vision 0.7×; jungle damage 0.87×). Coaching, Chat and
+  the game report don't pass `roleWeighted` and are unchanged. The chart draws
+  rank bands only when one role is picked. `higherIsBetter = null` on a card
+  means a neutral trend arrow (Avg Game Length, Median First Back).
 - Card colour is set to the rank-tier colour that the value corresponds to
 - Trend arrows compare current filtered period vs. the previous equal-length period (e.g. last 20 games vs the 20 before that)
 - `window.computeTabStats(tabName, matches, prevMatches)` is the main export — called by `renderer.js` when switching sub-tabs or changing filters

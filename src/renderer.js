@@ -31,6 +31,7 @@ window.require('./components/windowControls'); // registers initWindowControls
 window.require('./components/updateButton');   // registers initUpdateButton (titlebar ⟳)
 window.require('./components/skinsPanel');     // registers applySavedSkin, openSkinsPanel
 window.require('./components/chatPanel');      // registers openChatPanel (Ollama chat page)
+const { breakdownText } = window.require('./components/roleRanks');   // card tooltip: rank by role (#56)
 window.require('./components/laneGapChart');  // registers renderLaneGapChart (Lane Phase chart, #12)
 window.require('./components/roleBreakdown');  // registers renderRoleBreakdown (Roles table on Overview)
 window.require('./components/deathMapPanel');  // registers renderDeathMap (map under Death Review)
@@ -867,7 +868,8 @@ window.renderAnalyticsTab = async function (matches, previousMatches) {
     }
 
     // One role picked → cards are ranked on that role's thresholds (#10)
-    const cards = window.computeTabStats(tabName, matches, previousMatches, { role: window.analyticsRoleFilter || null });
+    // Role-weighted badges: each role ranked on its own ladder, then combined (#56)
+    const cards = window.computeTabStats(tabName, matches, previousMatches, { role: window.analyticsRoleFilter || null, roleWeighted: true });
 
     cards.forEach(card => {
         const div     = document.createElement('div');
@@ -929,6 +931,15 @@ window.renderAnalyticsTab = async function (matches, previousMatches) {
             div.addEventListener('keydown', e => {
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
             });
+        }
+
+        // Rank by role: each role's value and tier on its own ladder (#56).
+        // title is plain text, so the names can't inject markup.
+        if (card.roleBreakdown && card.roleBreakdown.length) {
+            const byRole = 'By role: ' + breakdownText(card.roleBreakdown);
+            div.title = div.title ? `${div.title}
+${byRole}` : `${card.label}
+${byRole}`;
         }
 
         div.innerHTML = html;

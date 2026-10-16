@@ -1,11 +1,10 @@
 /**
  * roleBenchmarks.js — per-role rank thresholds + which stats each role's
- * game report shows. Used by the Coaching page ONLY.
+ * game report shows.
  *
- * Why only Coaching: the Analytics cards usually cover a mix of roles (some
- * mid, some jungle, a few bot), so they keep the general STAT_BENCHMARKS in
- * analyticsEngine.js. A Coaching report is about one game, played in one role,
- * so it can be judged against that role.
+ * Used by Coaching (one game, one role) and by the Analytics cards, which rank
+ * each role's games on that role's ladder and combine the results (#56,
+ * components/roleRanks.js).
  *
  * Only stats whose normal value really depends on the role get an override
  * (CS for junglers/supports, damage share, vision, kill participation, …).
@@ -109,11 +108,42 @@ function statsForRole(role) {
     return [...GENERAL_STATS, ...own.filter(id => !GENERAL_STATS.includes(id))];
 }
 
-/** Thresholds for a stat in a role: the role override, else the general ones. */
+/** Cards that measure the same thing as an overridden stat share its ladder. */
+const ALIASES = { eco_cs_min: 'avg_csm', kp_combat: 'avg_kp' };
+
+/**
+ * Stats with no ladder of their own for a role, but far off the general one:
+ * the general ladder times a factor (#56). Estimates, from per-role averages
+ * over ~1,700 ranked/normal games: supports deal ~0.6x the damage, earn ~0.76x
+ * the gold and have ~2.3x the vision score and wards placed; laners deal
+ * ~1.15x the damage with ~0.7x the vision; junglers deal ~0.87x the damage.
+ */
+const ROLE_SCALE = {
+    UTILITY: { avg_dmg: 0.6, dmg_min: 0.6, dmg_min_combat: 0.6, eco_gold: 0.76, eco_gold_min: 0.76, vis_score: 2.3, vis_placed: 2.3 },
+    TOP:     { avg_dmg: 1.15, dmg_min: 1.15, dmg_min_combat: 1.15, vis_score: 0.7, vis_placed: 0.75 },
+    MIDDLE:  { avg_dmg: 1.15, dmg_min: 1.15, dmg_min_combat: 1.15, vis_score: 0.7, vis_placed: 0.75 },
+    BOTTOM:  { avg_dmg: 1.15, dmg_min: 1.15, dmg_min_combat: 1.15, vis_score: 0.7, vis_placed: 0.75 },
+    JUNGLE:  { avg_dmg: 0.87, dmg_min: 0.87, dmg_min_combat: 0.87 },
+};
+const scaledCache = new Map();
+
+/**
+ * Thresholds for a stat in a role: the role's own ladder (or an alias's),
+ * else the general ladder scaled for the role, else the general ladder.
+ */
 function benchmarkFor(statId, role, general) {
-    const own = ROLE_BENCHMARKS[normRole(role)];
+    const r = normRole(role);
+    const own = ROLE_BENCHMARKS[r];
     if (own && own[statId]) return own[statId];
-    return typeof general === 'function' ? general(statId) : null;
+    if (own && ALIASES[statId] && own[ALIASES[statId]]) return own[ALIASES[statId]];
+    const base = typeof general === 'function' ? general(statId) : null;
+    const factor = (ROLE_SCALE[r] || {})[statId];
+    if (!base || !factor) return base;
+    const key = `${r}:${statId}`;
+    if (!scaledCache.has(key)) {
+        scaledCache.set(key, Object.fromEntries(TIERS.map(t => [t, +(base[t] * factor).toFixed(3)])));
+    }
+    return scaledCache.get(key);
 }
 
 /** Same rule as analyticsEngine.evaluateBenchmark (>= / <=), from the top tier down. */
@@ -126,6 +156,6 @@ function tierFor(value, thresholds, higherIsBetter) {
 }
 
 module.exports = {
-    TIERS, ROLE_BENCHMARKS, GENERAL_STATS, ROLE_STATS, STAT_INFO, ROLES,
+    TIERS, ROLE_BENCHMARKS, ROLE_SCALE, ALIASES, GENERAL_STATS, ROLE_STATS, STAT_INFO, ROLES,
     normRole, statsForRole, benchmarkFor, tierFor,
 };
