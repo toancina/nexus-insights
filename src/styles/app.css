@@ -6465,3 +6465,119 @@ tr.is-low .ch-wr.is-low {
 .lg-tip-row b { color: var(--text-primary); }
 .lg-tip-games { color: var(--text-tertiary); margin-top: 4px; }
 .lg-empty { color: var(--text-tertiary); font-size: 12px; padding: 8px 0 4px; }
+
+/* ── Live game page (components/liveGamePanel.js, #59) ── */
+.live-detect-btn { flex-shrink: 0; }
+
+.live-status {
+    min-height: 18px;
+    margin: -10px 0 var(--s3);
+    font-size: var(--t-small);
+    color: var(--text-secondary);
+}
+.live-status.error { color: var(--error); }
+
+.live-teams {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s4);
+}
+@media (max-width: 900px) {
+    .live-teams { grid-template-columns: 1fr; }
+}
+
+.live-team h3 {
+    margin: 0 0 var(--s2);
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+
+.live-row {
+    display: grid;
+    grid-template-columns: 44px minmax(120px, 0.9fr) minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: var(--s3);
+    align-items: center;
+    padding: var(--s2) var(--s3);
+    margin-bottom: var(--s2);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+}
+.live-row.you { border-color: rgba(var(--accent-rgb), 0.55); }
+
+.live-champ {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-ctl);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.live-who { min-width: 0; }
+.live-name {
+    font-size: var(--t-body);
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.live-you {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--on-accent);
+    background: var(--accent-primary);
+}
+
+.live-sub {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+    font-size: var(--t-small);
+    color: var(--text-secondary);
+}
+.live-sub span { margin-right: 4px; }
+.live-spell {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+}
+
+.live-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+.live-tag {
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--line);
+}
+.live-tag.good { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.live-tag.bad  { color: var(--error);   border-color: color-mix(in srgb, var(--error) 45%, transparent); }
+
+.live-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.live-line {
+    font-size: var(--t-small);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.live-muted { color: var(--text-secondary); }

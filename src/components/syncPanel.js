@@ -15,6 +15,7 @@ const {
     attachLpReadingsToMatches
 } = require('../services/matchService');
 const { loadConfig } = require('../services/config');
+const { friendlyRiotError } = require('../services/riotErrors');
 
 let syncCooldownInterval = null;
 let syncCooldownEnd      = 0;
@@ -242,17 +243,8 @@ window.handleSync = async function (options = {}) {
         console.error('Sync error:', err.message);
         hideProgress();
 
-        let errorMessage = err.message;
-        // Riot answers 401 for a malformed/unknown key (e.g. pasted with a
-        // stray space) and 403 for an expired one. Development keys expire
-        // every 24 hours, so this is the error a new user hits most — say
-        // what to do, not just what went wrong.
-        if (err.response?.status === 401 || err.response?.status === 403) {
-            errorMessage = 'Riot API key invalid or expired. Development keys last 24 hours: ' +
-                           'get a new one at developer.riotgames.com and paste it in Settings (⚙).';
-        }
-        else if (err.response?.status === 404) errorMessage = 'Player not found. Check your Riot ID';
-        else if (err.response?.status === 429) errorMessage = 'Rate limited. Please wait a moment';
+        // 401/403 = bad or expired key, 404 = unknown Riot ID, 429 = rate limited
+        let errorMessage = friendlyRiotError(err);
 
         // syncMatches stops at the first game it couldn't fetch (oldest
         // first), so the games before it are stored and the next sync

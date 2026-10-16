@@ -62,6 +62,10 @@
         <button class="nav-drawer-btn" id="navTeammates" onclick="switchTopTab('teammates')">
             <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.3c3 .3 5.5 2.6 5.5 5.7"/></svg></span><span class="nav-text">Allies</span>
         </button>
+        <button class="nav-drawer-btn" id="navLive" onclick="switchTopTab('live')">
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg></span><span class="nav-text">Live</span>
+            <span class="nav-badge" id="liveBadge" title="A game is running"></span>
+        </button>
         <button class="nav-drawer-btn" id="navCoaching" onclick="switchTopTab('coaching')">
             <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span><span class="nav-text">Coaching</span>
             <span class="nav-badge" id="coachingBadge"></span>
@@ -582,6 +586,21 @@
                 </div>
             </div>
             <div class="teammates-list" id="teammatesList"></div>
+        </div>
+    </div>
+
+    <!-- Live game — components/liveGamePanel.js (#59) -->
+    <div id="live-tab" style="display:none;">
+        <div class="champions-shell">
+            <div class="coach-header">
+                <div>
+                    <h2>Live game</h2>
+                    <p>Everyone in the game you're playing: rank, mastery on their champion and their last 10 Solo/Duo games.</p>
+                </div>
+                <button class="sync-btn live-detect-btn" id="liveDetectBtn" type="button">Detect live game</button>
+            </div>
+            <div class="live-status" id="liveStatus" role="status" aria-live="polite"></div>
+            <div class="live-game" id="liveGame"></div>
         </div>
     </div>
 

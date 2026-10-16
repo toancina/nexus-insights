@@ -31,6 +31,7 @@ let gameDataCache = {
     runes: null,
     summonerSpells: null,
     summonerSpellsById: null, // Indexed by spell key (ID number)
+    champions: null,          // champion.json data, by Data Dragon id
     loaded: false
 };
 
@@ -66,16 +67,20 @@ async function loadGameData() {
 
         console.log(`Loading game data from Data Dragon v${DDRAGON_VERSION}...`);
 
-        // Fetch items, runes, and summoner spells in parallel
-        const [itemsResponse, runesResponse, summonerSpellsResponse] = await Promise.all([
+        // Fetch items, runes, summoner spells and champions in parallel
+        const [itemsResponse, runesResponse, summonerSpellsResponse, championsResponse] = await Promise.all([
             axios.get(`${DDRAGON_BASE}/data/en_US/item.json`),
             axios.get(`${DDRAGON_BASE}/data/en_US/runesReforged.json`),
-            axios.get(`${DDRAGON_BASE}/data/en_US/summoner.json`)
+            axios.get(`${DDRAGON_BASE}/data/en_US/summoner.json`),
+            axios.get(`${DDRAGON_BASE}/data/en_US/champion.json`)
         ]);
 
         gameDataCache.items = itemsResponse.data.data;
         gameDataCache.runes = runesResponse.data;
         gameDataCache.summonerSpells = summonerSpellsResponse.data.data;
+        // id ("Chogath") → { key: "31", name: "Cho'Gath", … }: the Live page
+        // needs the numeric key for champion mastery (#59)
+        gameDataCache.champions = championsResponse.data.data;
 
         // Create lookup by spell key (the numeric ID used in match data)
         gameDataCache.summonerSpellsById = {};
@@ -98,6 +103,7 @@ async function loadGameData() {
         gameDataCache.runes = [];
         gameDataCache.summonerSpells = {};
         gameDataCache.summonerSpellsById = {};
+        gameDataCache.champions = {};
         gameDataCache.loaded = false;
         throw error;
     }
@@ -169,6 +175,11 @@ function getGameDataCache() {
     return gameDataCache;
 }
 
+/** Data Dragon champion.json `data` ({} until loadGameData has run). */
+function getChampionList() {
+    return gameDataCache.champions || {};
+}
+
 function getDDragonVersion() {
     return DDRAGON_VERSION;
 }
@@ -186,6 +197,7 @@ module.exports = {
     getSummonerSpellData,
     isGameDataLoaded,
     getGameDataCache,
+    getChampionList,
     getDDragonVersion,
     getDDragonBase
 };
