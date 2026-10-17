@@ -248,6 +248,10 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
   existed, since Chat's "all queues" counted them (#68). `computeTeamImpact`
   returns no ranks unless a game has exactly 10 players.
 - **Rate limiting**: Sequential processing, 150ms delay between every API call
+- **Sync button** (#75): no fixed lockout after a sync; the limiter paces
+  every call. It counts down only after a 429 the limiter couldn't absorb
+  (`rateLimitWaitSeconds`: Riot's Retry-After, else 120 s). A click or Fill
+  gaps while a sync runs says so instead of doing nothing.
 - **Timestamp format**: the app stores **milliseconds** (`gameCreation`, 13 digits) everywhere, and `riotApi.getMatchIds()` converts to **seconds** (`Math.floor(ms / 1000)`) for Match-V5's `startTime`, which Riot defines in seconds. Pass `getMatchIds` milliseconds; don't remove the conversion (#41: this note used to say Riot takes milliseconds)
 
 ### JSON Compression
