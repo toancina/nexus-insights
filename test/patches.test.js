@@ -75,3 +75,15 @@ test('the patch is stored per game by the computed-stats pipeline', () => {
     delete raw.info.gameVersion;
     assert.equal(computeAdvancedStatsForMatch(raw, null, 'Ahri', 100).patch, '', "'' when Riot didn't say");
 });
+
+test('ddragonVersionForPatch: the game patch\'s own Data Dragon version (#67)', () => {
+    const { ddragonVersionForPatch } = require(path.join(SRC, 'services', 'patches.js'));
+    const versions = ['16.20.1', '16.19.1', '16.10.1', '16.2.1', '15.24.1', '15.1.2', '15.1.1'];
+    assert.equal(ddragonVersionForPatch('16.10', versions), '16.10.1');
+    assert.equal(ddragonVersionForPatch('16.1', versions), '16.1.1');     // not listed: guess .1 (not "16.10.1")
+    assert.equal(ddragonVersionForPatch('15.1', versions), '15.1.2');     // newest listed build of the patch
+    assert.equal(ddragonVersionForPatch('16.2', []), '16.2.1');           // versions.json not loaded (offline)
+    assert.equal(ddragonVersionForPatch('', versions), null);             // unknown patch: current version
+    assert.equal(ddragonVersionForPatch(null, versions), null);
+    assert.equal(ddragonVersionForPatch('16.2.1', versions), null);       // not a major.minor patch
+});

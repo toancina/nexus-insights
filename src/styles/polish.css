@@ -943,3 +943,15 @@ body.has-top-bar .champions-shell { padding-top: var(--gutter); }
 
 /* A dialog is open: the page doesn't scroll behind it (#63) */
 body.modal-open { overflow: hidden; }
+
+/* An item icon that couldn't load from the game's patch or the current one
+   (#67, components/itemIcon.js): a quiet placeholder, not a broken image */
+img.item-missing {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    box-sizing: border-box;
+    min-width: 16px;
+    min-height: 16px;
+}

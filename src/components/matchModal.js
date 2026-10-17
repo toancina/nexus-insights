@@ -7,6 +7,7 @@
  */
 
 const { getMatchById }   = require('../services/matchService');
+const { itemImg } = require('./itemIcon');
 const { evaluateBadges } = require('./badgeEvaluator');
 const { escapeHtml }     = require('./dom');
 const { computeTeamImpact, IMPACT_AREAS } = require('../services/teamImpact');
@@ -52,7 +53,7 @@ function renderImpactCell(impact) {
     return `<td class="team-cell-center impact-cell" title="${escapeHtml(title)}">#${impact.rank}${tag}</td>`;
 }
 
-function renderPlayerRow(player, gameDuration) {
+function renderPlayerRow(player, gameDuration, patch) {
     // No deaths counts as one, like the Analytics cards: 0/0/1 is 1.00, not "Perfect"
     const kdaNum = (player.kills + player.assists) / Math.max(1, player.deaths);
     const kda    = kdaNum.toFixed(2);
@@ -63,10 +64,10 @@ function renderPlayerRow(player, gameDuration) {
     // "Bought at" in the item tooltip (#7)
     const at = id => (player.boughtAt && player.boughtAt.has(id) ? ` data-bought="${formatClock(player.boughtAt.get(id))}"` : '');
     const itemsTop    = player.items.slice(0, 3).map(id =>
-        id && id > 0 ? `<img src="${DDRAGON}/img/item/${id}.png" class="team-item-sm" data-item-id="${id}"${at(id)} alt="Item">` : `<div class="team-item-empty-sm"></div>`
+        id && id > 0 ? itemImg(id, { patch, extra: `class="team-item-sm"${at(id)}` }) : `<div class="team-item-empty-sm"></div>`
     ).join('');
     const itemsBottom = player.items.slice(3, 7).map(id =>
-        id && id > 0 ? `<img src="${DDRAGON}/img/item/${id}.png" class="team-item-sm" data-item-id="${id}"${at(id)} alt="Item">` : `<div class="team-item-empty-sm"></div>`
+        id && id > 0 ? itemImg(id, { patch, extra: `class="team-item-sm"${at(id)}` }) : `<div class="team-item-empty-sm"></div>`
     ).join('');
 
     const primaryPath   = RUNE_ICONS[player.primaryRune]        || null;
@@ -246,7 +247,7 @@ function createExpandedRow(match, index, badges = []) {
                             <div class="team-table-wrapper">
                                 <table class="team-table-expanded">
                                     ${tableHeader}
-                                    <tbody>${yourTeam.map(p => renderPlayerRow(p, match.gameDuration)).join('')}</tbody>
+                                    <tbody>${yourTeam.map(p => renderPlayerRow(p, match.gameDuration, match.patch)).join('')}</tbody>
                                 </table>
                             </div>
                         </div>
@@ -255,7 +256,7 @@ function createExpandedRow(match, index, badges = []) {
                             <div class="team-table-wrapper">
                                 <table class="team-table-expanded">
                                     ${tableHeader}
-                                    <tbody>${enemyTeam.map(p => renderPlayerRow(p, match.gameDuration)).join('')}</tbody>
+                                    <tbody>${enemyTeam.map(p => renderPlayerRow(p, match.gameDuration, match.patch)).join('')}</tbody>
                                 </table>
                             </div>
                         </div>

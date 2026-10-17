@@ -82,4 +82,18 @@ function patchWinRates(matches, limit = 6) {
         .map(r => ({ ...r, winRate: r.wins / r.games }));
 }
 
-module.exports = { patchOf, comparePatchDesc, patchList, filterByPeriod, patchWinRates, periodLabel, WINDOWS };
+/**
+ * The Data Dragon version for a game's patch ("16.10" → "16.10.1"), so an
+ * item that has since been removed still has its icon (#67). The newest
+ * listed version of that patch, else "<patch>.1" when the list isn't loaded;
+ * null when the patch is unknown.
+ * @param {string} patch     major.minor, as stored in matches.patch
+ * @param {string[]} versions Data Dragon's versions.json (newest first)
+ */
+function ddragonVersionForPatch(patch, versions) {
+    if (!/^\d+\.\d+$/.test(String(patch || ''))) return null;
+    const listed = (versions || []).find(v => v.startsWith(patch + '.'));
+    return listed || `${patch}.1`;
+}
+
+module.exports = { ddragonVersionForPatch, patchOf, comparePatchDesc, patchList, filterByPeriod, patchWinRates, periodLabel, WINDOWS };
