@@ -1021,6 +1021,16 @@ sent to the browser (`setWindowOpenHandler` / `will-navigate` in main.js).
   surfaces `--surface/--line/--line-strong`, type `--t-label/--t-small/--t-body/--t-value`.
   Floating glass nav rail, filters styled as tabs, rank cards 1 column wide
   (`balanceStatsGrid` counts every card as 1 unit, max 8 columns).
+- **Layer scale (#63).** Every z-index uses a variable from the top of
+  `polish.css`: `--z-below` (−1, background glow) < `--z-local` (5, raised
+  inside a card) < `--z-sticky` (10) < `--z-topbar` (40) < `--z-nav` (100) <
+  `--z-popover` (500) < `--z-modal` (1000) < `--z-toast` < `--z-tooltip` <
+  `--z-confetti` < `--z-titlebar` (2000, so window buttons work over a dialog).
+  `.app-container` has **no** z-index (it made each page its own layer, so the
+  Settings dialog was drawn under the top bar and the whole Match History list).
+  Dialogs live at the end of `<body>`, outside the pages; `body.modal-open`
+  stops the page scrolling behind one. `test/zindex.test.js` fails on a raw
+  z-index number, an undefined layer, or the dialog moving back into a page.
 - **Never hard-code the accent.** Use `var(--accent-primary)`,
   `rgba(var(--accent-rgb), a)`, `--accent-deep`, `--on-accent`, `var(--gold)`,
   `rgba(var(--gold-rgb), a)`. `test/skins.test.js` fails if `#00cfbc` or

@@ -105,7 +105,7 @@ select:focus-visible {
     filter: blur(80px);
     opacity: 0.3;
     pointer-events: none;
-    z-index: 0;
+    z-index: var(--z-below);
 }
 
 .bg-orb-1 {
@@ -152,7 +152,7 @@ select:focus-visible {
     justify-content: space-between;
     padding-left: 14px;
     background: transparent;
-    z-index: 9000;
+    z-index: var(--z-titlebar);
     /* Whole strip drags the window */
     -webkit-app-region: drag;
     user-select: none;
@@ -231,7 +231,6 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 /* Main container */
 .app-container {
     position: relative;
-    z-index: 1;
     max-width: 95%;
     margin: 0 auto;
     /* The header is gone (app name lives in the title bar) and the section
@@ -1118,7 +1117,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 .match-table thead th {
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: var(--z-sticky);
     background: rgba(26, 26, 34, 0.95);
     backdrop-filter: blur(12px) saturate(180%);
     -webkit-backdrop-filter: blur(12px) saturate(180%);
@@ -1307,7 +1306,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6),
         0 0 0 1px rgba(255, 255, 255, 0.05),
         0 0 20px rgba(var(--accent-rgb), 0.2);
-    z-index: 10000;
+    z-index: var(--z-tooltip);
     pointer-events: none;
 }
 
@@ -1641,7 +1640,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     opacity: 0;
     transition: opacity 0.3s var(--transition-smooth);
 }
@@ -1688,7 +1687,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     align-items: center;
     justify-content: center;
     transition: all 0.25s var(--transition-smooth);
-    z-index: 10;
+    z-index: var(--z-local);
 }
 
 .modal-close:hover {
@@ -1726,7 +1725,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     align-items: center;
     gap: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    z-index: 1000;
+    z-index: var(--z-toast);
     animation: slideInRight 0.3s ease;
 }
 
@@ -2101,7 +2100,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     padding-right: 45px;
 }/* Improvement state - green (up arrow for most, down for isolated deaths) *//* Decline state - red (down arrow for most, up for isolated deaths) *//* No change state - yellow dash *//* ===== Setup Modal Styles ===== */
 #setupModal {
-    z-index: 10000;
+    z-index: var(--z-modal);
 }
 
 .setup-modal {
@@ -3317,7 +3316,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 8px;
     padding: 4px;
-    z-index: 200;
+    z-index: var(--z-popover);
     min-width: 100%;
     display: none;
     box-shadow: 0 8px 28px rgba(0,0,0,0.45);
@@ -3423,7 +3422,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 
 .cal-cell:hover {
     transform: scale(1.3);
-    z-index: 2;
+    z-index: var(--z-local);
 }
 
 .cal-cell-empty {
@@ -3577,7 +3576,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     position: fixed;
     left: 0;
     top: calc(var(--titlebar-height) + 14px);
-    z-index: 900;
+    z-index: calc(var(--z-nav) + 1);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3620,7 +3619,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     right: 0;
     top: var(--titlebar-height);
     bottom: 0;
-    z-index: 890;
+    z-index: calc(var(--z-nav) - 1);
     background: rgba(0, 0, 0, 0.45);
     opacity: 0;
     pointer-events: none;
@@ -3637,7 +3636,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     left: 0;
     top: var(--titlebar-height);
     bottom: 0;
-    z-index: 895;
+    z-index: var(--z-nav);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -4165,7 +4164,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 9999;
+    z-index: var(--z-confetti);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4628,7 +4627,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 
 .lp-tip {
     position: absolute;
-    z-index: 6;
+    z-index: var(--z-local);
     padding: 6px 9px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 7px;
@@ -4685,7 +4684,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     position: absolute;
     top: 30px;
     right: 8px;
-    z-index: 20;
+    z-index: var(--z-popover);
     width: 300px;
     padding: 10px 12px;
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -4978,7 +4977,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     position: absolute;
     top: 24px;
     left: 0;
-    z-index: 5;
+    z-index: var(--z-local);
     min-width: 150px;
     max-width: 280px;
     padding: 8px 10px;
@@ -5818,7 +5817,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     opacity: 0;
     transition: opacity 0.12s ease;
     white-space: nowrap;
-    z-index: 5;
+    z-index: var(--z-local);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
@@ -6158,7 +6157,7 @@ body {
 .ch-table th {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: var(--z-sticky);
     background: rgba(18, 20, 28, 0.97);
     cursor: pointer;
     user-select: none;
@@ -6457,7 +6456,7 @@ tr.is-low .ch-wr.is-low {
     padding: 7px 10px;
     font-size: 11px;
     min-width: 110px;
-    z-index: 2;
+    z-index: var(--z-local);
 }
 .lg-tip[hidden] { display: none; }
 .lg-tip-time { color: var(--text-secondary); font-weight: 700; margin-bottom: 4px; }
