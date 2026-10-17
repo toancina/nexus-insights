@@ -30,6 +30,10 @@ function mapImage(onLoad) {
 }
 
 let lastDeaths = [];
+// Dots for lastDeaths, sorted by density: a redraw (map image loaded, window
+// resized) reuses them instead of recomputing (#66)
+let cachedDots = null;
+
 
 function draw() {
     const canvas = document.querySelector('#deathMap .dm-canvas');
@@ -48,7 +52,8 @@ function draw() {
     ctx.fillStyle = 'rgba(8, 10, 16, 0.45)';               // dim the map so dots stand out
     ctx.fillRect(0, 0, size, size);
 
-    const dots = D.densityDots(lastDeaths).sort((a, b) => a.density - b.density);
+    if (!cachedDots) cachedDots = D.densityDots(lastDeaths).sort((a, b) => a.density - b.density);
+    const dots = cachedDots;
     // "Dense" is measured against the 95th percentile, not the single busiest
     // spot, so one hot spot doesn't wash every other cluster out to amber.
     // Dots get smaller and fainter as the count grows, so hundreds of games
@@ -75,11 +80,12 @@ function draw() {
 function renderDeathMap(matches) {
     const host = document.getElementById('deathMap');
     if (!host) return;
-    if (!matches) { host.hidden = true; host.innerHTML = ''; lastDeaths = []; return; }
+    if (!matches) { host.hidden = true; host.innerHTML = ''; lastDeaths = []; cachedDots = null; return; }
     host.hidden = false;
 
     const withData = matches.filter(m => m.deathPositions != null);
     lastDeaths = withData.flatMap(m => D.decodeDeaths(m.deathPositions));
+    cachedDots = null;
     const head = `<div class="dm-head"><span class="dm-title">Where you die</span>`;
     if (!lastDeaths.length) {
         host.innerHTML = `${head}</div><div class="dm-empty">${withData.length

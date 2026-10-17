@@ -75,3 +75,25 @@ test('density counts deaths close to each one', () => {
     const dots = D.densityDots([{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 5000, y: 5000 }], 600);
     assert.deepEqual(dots.map(d => d.density), [2, 2, 1]);
 });
+
+test('densityDots (grid) matches the all-pairs count on random deaths (#66)', () => {
+    // The old algorithm, kept here as the reference
+    const allPairs = (deaths, radius) => deaths.map(d => ({ x: d.x, y: d.y,
+        density: deaths.filter(o => (o.x - d.x) ** 2 + (o.y - d.y) ** 2 <= radius * radius).length }));
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const deaths = Array.from({ length: 800 }, () => ({ x: Math.round(rnd() * 14980), y: Math.round(rnd() * 14980) }));
+    // clusters, points exactly on the radius, on cell edges, and duplicates
+    deaths.push({ x: 600, y: 0 }, { x: 0, y: 0 }, { x: 1200, y: 1200 }, { x: 1200, y: 1200 }, { x: 599.5, y: 600 });
+    for (const radius of [600, 300, 1000]) {
+        assert.deepEqual(D.densityDots(deaths, radius), allPairs(deaths, radius), `radius ${radius}`);
+    }
+    assert.deepEqual(D.densityDots([]), []);
+});
+
+test('densityDots handles ~10,000 deaths quickly', () => {
+    const deaths = Array.from({ length: 10000 }, (_, i) => ({ x: (i * 7919) % 14980, y: (i * 104729) % 14980 }));
+    const t = Date.now();
+    D.densityDots(deaths);
+    assert.ok(Date.now() - t < 500, `took ${Date.now() - t} ms`);
+});
