@@ -40,7 +40,15 @@ let cachedConfig = null;
 // Load config from file (cached after first read)
 function loadConfig() {
     if (cachedConfig) return { ...cachedConfig };
+    return readConfigFile();
+}
 
+/**
+ * Read config.json (or its backup) from disk, bypassing the cache, and cache
+ * the result. Writes start from this: the main process and the renderer each
+ * have their own cache, so a cached copy can be older than the file (#72).
+ */
+function readConfigFile() {
     ensureUserDataDir();
     // config.json, or the copy kept from the save before it if that one is
     // missing or doesn't parse (#40)
@@ -57,7 +65,25 @@ function loadConfig() {
             console.error(`Error loading ${path.basename(file)}:`, err.message);
         }
     }
+    cachedConfig = null;
     return { ...defaultConfig };
+}
+
+/** Forget the cached copy; the next loadConfig() reads the file. */
+function clearConfigCache() {
+    cachedConfig = null;
+}
+
+/**
+ * Change some keys and keep everything else as it is **on disk**. Use this
+ * rather than saveConfig({ ...loadConfig(), … }): the other process may have
+ * saved since this one cached the file, and writing the cached copy back
+ * would undo that save (#72). `remove` lists keys to delete.
+ */
+function updateConfig(patch, { remove = [] } = {}) {
+    const config = { ...readConfigFile(), ...patch };
+    for (const key of remove) delete config[key];
+    return saveConfig(config);
 }
 
 // Save config to file: write a temp file, keep the current file as .bak, then
@@ -117,14 +143,14 @@ function hasSavedValue(key) {
 }
 
 function setConfigValue(key, value) {
-    const config = loadConfig();
-    config[key] = value;
-    return saveConfig(config);
+    return updateConfig({ [key]: value });
 }
 
 module.exports = {
     loadConfig,
     saveConfig,
+    updateConfig,
+    clearConfigCache,
     isConfigValid,
     getConfigValue,
     setConfigValue,

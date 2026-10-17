@@ -1053,6 +1053,13 @@ sent to the browser (`setWindowOpenHandler` / `will-navigate` in main.js).
 - `saveConfig` writes `config.json.tmp`, copies the old file to `config.json.bak`, then renames the temp file over it; `loadConfig` falls back to `.bak` if `config.json` is missing or broken (#40).
 - `saveSetup` now merges into the existing config (it used to replace it and
   wipe skin/coaching keys).
+- **Partial writes go through `updateConfig(patch, { remove })`** (and
+  `setConfigValue`), which merges onto the file as it is on disk, not onto
+  the cached copy. Main and the renderer each cache config.json, so writing
+  `{ ...loadConfig(), … }` could put back what the other process had just
+  changed: main's `settings:background` handler used to undo a Settings save
+  (new key, Riot ID, skin) that way (#72). Main now only applies those
+  settings and calls `clearConfigCache()`; it doesn't write them.
 - Page footer removed; Riot's legal notice lives in the Settings dialog.
 
 ### Coaching page (rewritten 2026-10)

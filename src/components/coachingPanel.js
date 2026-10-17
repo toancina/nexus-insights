@@ -22,7 +22,7 @@
     'use strict';
 
     const { getLpReadings } = require('../services/matchService');
-    const { loadConfig, saveConfig } = require('../services/config');
+    const { loadConfig, updateConfig } = require('../services/config');
     const Engine   = require('./coachingEngine');
     const Progress = require('./coachingProgress');
     const Board    = require('./coachingBoard');
@@ -283,7 +283,7 @@
         const set = new Set(Array.isArray(cfg.coachingTrendsAll) ? cfg.coachingTrendsAll : []);
         if (set.has(tab)) set.delete(tab); else set.add(tab);
         cfg.coachingTrendsAll = [...set];
-        saveConfig(cfg);
+        updateConfig({ coachingTrendsAll: cfg.coachingTrendsAll });
         redrawTrends(cfg.coachingTrendsAll);
     };
 
@@ -294,7 +294,7 @@
         const current = Array.isArray(cfg.coachingTrendsAll) ? cfg.coachingTrendsAll : [];
         const allOn = tabs.every(t => current.includes(t));
         cfg.coachingTrendsAll = allOn ? [] : tabs;
-        saveConfig(cfg);
+        updateConfig({ coachingTrendsAll: cfg.coachingTrendsAll });
         redrawTrends(cfg.coachingTrendsAll);
     };
 
@@ -432,9 +432,8 @@
             state.moves = Board.movesSince(cfg.coachingBoardStatus, board.tickets);
             state.board = board;
             if (state.openTicket && !board.tickets.some(t => t.id === state.openTicket)) state.openTicket = null;
-            cfg.coachingBoardStatus = Board.statusMap(board.tickets);
-            delete cfg.coachingFocus;          // pinning is gone (#61)
-            saveConfig(cfg);
+            // pinning is gone (#61): drop the old coachingFocus key
+            updateConfig({ coachingBoardStatus: Board.statusMap(board.tickets) }, { remove: ['coachingFocus'] });
 
             let reading = null;
             try {

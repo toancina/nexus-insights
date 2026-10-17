@@ -14,7 +14,7 @@ const {
     renderMatchTable, renderMatchRows, getRankedStats
 } = window.require('./components/tableRenderer');
 const { loadGameData, getDDragonBase } = window.require('./services/dataDragon');
-const { loadConfig, saveConfig, isConfigValid, userDataPath } = window.require('./services/config');
+const { loadConfig, updateConfig, isConfigValid, userDataPath } = window.require('./services/config');
 
 // ============================================================
 // IMPORTS — UI component modules (self-register window.* as side-effects)
@@ -245,7 +245,7 @@ window.saveSetup = function () {
     // Merge, don't replace: config.json also holds the skin, custom background
     // and coaching state, which this dialog doesn't show. Replacing the whole
     // object used to silently wipe them on every Settings save.
-    if (saveConfig({ ...loadConfig(), apiKey, gameName, tagLine, region, platform, closeToTray, startOnLogin, autoLogGames })) {
+    if (updateConfig({ apiKey, gameName, tagLine, region, platform, closeToTray, startOnLogin, autoLogGames })) {
         // The login-item registration lives in the OS, so only the main
         // process can apply it — tell it the new values took effect.
         try {
