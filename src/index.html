@@ -188,6 +188,9 @@
         <div class="toast-close" onclick="hideToast()">×</div>
     </div>
 
+    <!-- Every page scrolls in here, below the top bar (or the title bar on
+         pages without one), so nothing passes behind them (#80) -->
+    <main class="page-scroll" id="pageScroll">
     <div class="app-container">
 
         <!-- Analytics Tab Content -->
@@ -573,6 +576,7 @@
             <div class="chat-foot" id="chatFoot"></div>
         </div>
     </div>
+    </main>
 
 
     <!-- Setup Modal (first-time setup / Settings): at page level, outside every
