@@ -26,4 +26,17 @@ function friendlyRiotError(err) {
     return (err && err.message) || String(err);
 }
 
-module.exports = { friendlyRiotError, isKeyError };
+/**
+ * How long the Sync button should wait after this error, in seconds: Riot's
+ * Retry-After for a 429 the limiter couldn't absorb (2 minutes, Riot's long
+ * window, without one), else null. The limiter paces every other call, so
+ * there is no fixed lockout after a sync (#75).
+ */
+function rateLimitWaitSeconds(err) {
+    const res = err && err.response;
+    if (!res || res.status !== 429) return null;
+    const after = Number(res.headers && res.headers['retry-after']);
+    return Number.isFinite(after) && after > 0 ? Math.ceil(after) : 120;
+}
+
+module.exports = { friendlyRiotError, isKeyError, rateLimitWaitSeconds };

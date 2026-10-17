@@ -26,3 +26,14 @@ test('isKeyError: only 401 and 403', () => {
     assert.equal(isKeyError(new Error('network')), false);
     assert.equal(isKeyError(null), false);
 });
+
+test('the Sync button only waits after a 429, as long as Riot says (#75)', () => {
+    const { rateLimitWaitSeconds } = require(path.join(SRC, 'services', 'riotErrors.js'));
+    const err = (status, headers = {}) => ({ response: { status, headers } });
+    assert.equal(rateLimitWaitSeconds(err(429, { 'retry-after': '37' })), 37);
+    assert.equal(rateLimitWaitSeconds(err(429, { 'retry-after': '0.4' })), 1);
+    assert.equal(rateLimitWaitSeconds(err(429)), 120, 'no Retry-After: Riot\'s 2-minute window');
+    assert.equal(rateLimitWaitSeconds(err(403)), null);
+    assert.equal(rateLimitWaitSeconds(new Error('network')), null);
+    assert.equal(rateLimitWaitSeconds(null), null);
+});

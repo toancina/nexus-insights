@@ -14,11 +14,13 @@ const {
     attachLpReadingsToMatches
 } = require('../services/matchService');
 const { loadConfig } = require('../services/config');
-const { friendlyRiotError } = require('../services/riotErrors');
+const { friendlyRiotError, rateLimitWaitSeconds } = require('../services/riotErrors');
 
+// Only after a 429 the rate limiter couldn't absorb (#75): every call goes
+// through riotApi's limiter, so a sync that wasn't rate limited leaves the
+// button usable straight away.
 let syncCooldownInterval = null;
 let syncCooldownEnd      = 0;
-const SYNC_COOLDOWN_SECONDS = 120; // matches Riot's 2-minute rate-limit window
 
 // ---------------------------------------------------------------------------
 // STATUS HELPER (forwards to renderer's showToast)
@@ -46,12 +48,12 @@ function setButtonLoading(loading) {
     }
 }
 
-function startSyncCooldown() {
+function startSyncCooldown(seconds) {
     const btn     = document.getElementById('syncBtn');
     const btnText = btn.querySelector('.btn-text');
     const btnIcon = btn.querySelector('.btn-icon');
 
-    syncCooldownEnd    = Date.now() + SYNC_COOLDOWN_SECONDS * 1000;
+    syncCooldownEnd    = Date.now() + seconds * 1000;
     btn.disabled       = true;
     btnIcon.innerHTML  = '&#9202;';
 
@@ -111,10 +113,9 @@ function hideProgress() {
  * @param {object} [options]
  * @param {boolean} [options.auto] Triggered by the live-game watcher rather
  *   than the button. An auto sync pulls in one just-finished game, so it skips
- *   the manual-use guards: it doesn't complain when fields are blank (it falls
- *   back to the saved config), it isn't blocked by the cooldown, and it doesn't
- *   start one afterwards — a two-minute lockout after every game would make the
- *   button useless exactly when you want to press it.
+ *   the manual-use guards: no message when no account is set or a sync is
+ *   already running, no rate-limit cooldown before or after it.
+ * @param {boolean} [options.fillGaps] Settings → Fill gaps (#18).
  */
 window.handleSync = async function (options = {}) {
     const auto   = options.auto === true;
@@ -132,11 +133,17 @@ window.handleSync = async function (options = {}) {
         return;
     }
     if (syncCooldownInterval && !auto) {
-        updateStatus('error', 'Cooldown Active', 'Please wait for the cooldown to finish');
+        updateStatus('error', 'Rate Limited', 'Riot asked to wait: the button counts down until it can sync again');
         return;
     }
-    // Never run two syncs at once, however they were started.
-    if (window.isSyncing) return;
+    // Never run two syncs at once, however they were started. Say so when
+    // it was a click (a post-game auto sync just skips: one is running).
+    if (window.isSyncing) {
+        if (!auto) updateStatus('error', 'Sync Already Running',
+            options.fillGaps === true ? 'Run Fill gaps again once the current sync has finished'
+                                      : 'Wait for the current sync to finish');
+        return;
+    }
 
     setButtonLoading(true);
     // The LP watcher polls the same endpoints; this tells it to stand down so
@@ -234,11 +241,6 @@ window.handleSync = async function (options = {}) {
             }
         } catch (e) { console.warn('LP attribution failed:', e.message); }
 
-        // An auto sync fetches a single new game — nowhere near the rate
-        // limit, and locking the button for two minutes after every match
-        // would be worse than useless.
-        if (!auto) startSyncCooldown();
-
         // Let the caller see whether anything actually landed, so the
         // post-game watcher knows whether to try again.
         return { newMatches: result.newMatches || 0 };
@@ -259,6 +261,9 @@ window.handleSync = async function (options = {}) {
         }
 
         updateStatus('error', 'Sync Failed', errorMessage);
+        // Riot still said "too many" after the limiter's retries: wait as told
+        const wait = rateLimitWaitSeconds(err);
+        if (wait && !auto) startSyncCooldown(wait);
         return { newMatches: 0, error: errorMessage };
     } finally {
         window.isSyncing = false;
