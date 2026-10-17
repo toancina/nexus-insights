@@ -175,3 +175,13 @@ test('gives up after maxRetries and rethrows', async () => {
     await assert.rejects(runAll(clock, p), /always down/);
     assert.equal(calls, 3, 'initial attempt + 2 retries');
 });
+
+test('retries: 0 fails fast, e.g. the Settings check offline (#74)', async () => {
+    const clock = fakeClock();
+    const rl = new RateLimiter([{ limit: 100, intervalMs: 1000 }], { now: clock.now, sleep: clock.sleep });
+
+    let calls = 0;
+    const p = rl.request(async () => { calls++; throw new Error('ENOTFOUND'); }, { retries: 0 });
+    await assert.rejects(runAll(clock, p), /ENOTFOUND/);
+    assert.equal(calls, 1);
+});

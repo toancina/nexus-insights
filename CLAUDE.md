@@ -965,6 +965,21 @@ history for good (`scripts/cleanup-matches.js` exists because it happened).
 - A game both accounts played is stored once (matchId is the key), under
   whichever synced it first.
 
+### First run (#74) — 2026-10
+
+- **Empty Analytics:** `renderEmptyState(gameCount)` (renderer.js) shows
+  `#analyticsEmpty` instead of a blank page: "Set up your account" + Open
+  Settings without a valid config, else "No games yet" + Sync Matches.
+  `.nav-count:empty` is hidden (it was a grey dot).
+- **Setup check:** Save calls `riotApi.verifyAccount` (Account-V1, then
+  Summoner-V4 on the chosen server; the dialog's key, `retries: 0`) when the
+  key, Riot ID or server changed. `services/setupCheck.js` `verifyProblem`
+  (pure, tested) words the error: bad key, unknown Riot ID, no account on that
+  server. Those keep the dialog open; a second Save keeps the details anyway.
+  Offline / Riot busy: saved unchecked, with a toast.
+- First-run Save with checked details starts the first sync.
+
+### Left nav rail — 2026-10
 
 The sliding drawer is gone. `#navDrawer` carries `nav-rail` and is always
 visible (78px, `--nav-rail-width`; `body` is padded by that). Buttons stack

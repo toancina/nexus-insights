@@ -237,6 +237,20 @@
     top: 2px;
     right: 6px;
 }
+/* No count yet: no grey dot (#74) */
+.nav-count:empty { display: none; }
+
+/* Analytics with no games (#74) */
+.analytics-empty {
+    max-width: 560px;
+    margin: var(--s6) auto;
+    padding: var(--s5);
+    text-align: center;
+}
+.analytics-empty[hidden] { display: none; }
+.analytics-empty .empty-title { margin: 0 0 var(--s3); font-size: 1.4rem; color: var(--text-primary); }
+.analytics-empty .empty-text { margin: 0 0 var(--s5); font-size: var(--t-body); line-height: 1.6; color: var(--text-secondary); }
+.analytics-empty .empty-action { margin: 0 auto; }
 
 /* ==========================================================================
    Match History
