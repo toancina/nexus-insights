@@ -77,3 +77,42 @@ test('saves never leave a half-written config, and a broken one falls back (#40)
         fs.rmSync(dir, { recursive: true, force: true });
     }
 });
+
+test("a write in one process keeps the other process's save (#72)", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-config-'));
+    // Two module instances on one folder, like the main process and the renderer
+    const main = freshConfig(dir);
+    const renderer = freshConfig(dir);
+    const onDisk = () => JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+    try {
+        main.C.setConfigValue('startOnLogin', false);              // main at startup
+        assert.equal(main.C.loadConfig().gameName, '');             // main's cached copy
+
+        // Settings → Save in the renderer
+        assert.ok(renderer.C.updateConfig({ apiKey: 'test-key', gameName: 'Name', tagLine: 'TAG', skin: 'demacia' }));
+
+        // Main writes one key later: the renderer's save survives
+        main.C.setConfigValue('ddragonVersion', '16.20.1');
+        const saved = onDisk();
+        assert.equal(saved.gameName, 'Name');
+        assert.equal(saved.apiKey, 'test-key');
+        assert.equal(saved.skin, 'demacia');
+        assert.equal(saved.startOnLogin, false);
+        assert.equal(saved.ddragonVersion, '16.20.1');
+
+        // ...and so does main's, when the renderer writes again from its older cache
+        renderer.C.setConfigValue('bgDim', { demacia: 0.5 });
+        assert.equal(onDisk().ddragonVersion, '16.20.1');
+
+        // A cleared cache reads the file again
+        main.C.clearConfigCache();
+        assert.equal(main.C.loadConfig().gameName, 'Name');
+
+        // updateConfig can drop a key
+        renderer.C.updateConfig({ coachingBoardStatus: {} }, { remove: ['skin'] });
+        assert.equal('skin' in onDisk(), false);
+    } finally {
+        main.cleanup(); renderer.cleanup();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});

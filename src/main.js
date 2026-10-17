@@ -3,7 +3,7 @@ const path = require('path');
 const fs   = require('fs');
 
 const { initDatabase } = require('./services/database');
-const { loadConfig, setConfigValue, hasSavedValue } = require('./services/config');
+const { loadConfig, setConfigValue, hasSavedValue, clearConfigCache } = require('./services/config');
 const { createUpdater } = require('./services/updater');
 
 const IS_MAC = process.platform === 'darwin';
@@ -355,12 +355,12 @@ ipcMain.on('window:control', (event, action) => {
 
 // Settings changes that the main process owns. The renderer saves the config
 // itself, then tells us so the OS-level bits take effect without a restart.
-ipcMain.on('settings:background', (event, { closeToTray, startOnLogin }) => {
-  if (typeof closeToTray === 'boolean')   setConfigValue('closeToTray', closeToTray);
-  if (typeof startOnLogin === 'boolean') {
-    setConfigValue('startOnLogin', startOnLogin);
-    applyLoginItemSetting(startOnLogin);
-  }
+// The renderer has already saved both values; main only applies them. Writing
+// them here used to write main's startup copy of config.json back over the
+// renderer's save, undoing a new API key, Riot ID or skin (#72).
+ipcMain.on('settings:background', (event, { startOnLogin }) => {
+  clearConfigCache();                    // close-to-tray reads the new value
+  if (typeof startOnLogin === 'boolean') applyLoginItemSetting(startOnLogin);
 });
 
 // ---------------------------------------------------------------------------
