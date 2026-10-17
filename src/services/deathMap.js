@@ -88,13 +88,36 @@ function biggestShift(phases) {
     return { zone: best.zone, label: ZONE_LABELS[best.zone], fromPhase: first.label, toPhase: last.label, from: best.from, to: best.to };
 }
 
-/** One dot per death with how many deaths are within `radius` (itself included). */
+/**
+ * One dot per death with how many deaths are within `radius` (itself included).
+ *
+ * Deaths are bucketed into a grid of `radius`-sized cells, so each one is only
+ * compared with its own cell and the 8 around it: anything farther is more
+ * than `radius` away. Comparing every death with every other one took ~1 s per
+ * Death Review render on ~10,000 deaths (#66).
+ */
 function densityDots(deaths, radius = 600) {
     const r2 = radius * radius;
-    return deaths.map(d => ({
-        x: d.x, y: d.y,
-        density: deaths.reduce((n, o) => n + (((o.x - d.x) ** 2 + (o.y - d.y) ** 2) <= r2 ? 1 : 0), 0),
-    }));
+    const cell = p => [Math.floor(p.x / radius), Math.floor(p.y / radius)];
+    const grid = new Map();
+    for (const d of deaths) {
+        const [cx, cy] = cell(d);
+        const key = cx + ',' + cy;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(d);
+    }
+    return deaths.map(d => {
+        const [cx, cy] = cell(d);
+        let n = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                for (const o of grid.get((cx + dx) + ',' + (cy + dy)) || []) {
+                    if ((o.x - d.x) ** 2 + (o.y - d.y) ** 2 <= r2) n++;
+                }
+            }
+        }
+        return { x: d.x, y: d.y, density: n };
+    });
 }
 
 module.exports = {
