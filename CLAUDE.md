@@ -920,9 +920,18 @@ Under the Lane Phase cards: average gold and XP minus your lane opponent's
   teammates) and disables `#champFilter` / `#roleFilter` with an explaining
   title on Champions and Allies, which ignore them. `<body>` starts with the
   class, since Analytics is the first page.
-- polish.css: `.top-bar` is `position: sticky; top: var(--titlebar-height)`
-  (the window scrolls; Match History scrolls inside its own table), and pages
-  under it drop the title-bar part of their top padding.
+- **Page scroll area (#80):** the window never scrolls (`html, body`
+  overflow hidden, body a flex column). `.top-bar` sits in the flow below
+  the title bar, and every page lives in `<main id="pageScroll">`, the one
+  scroll area, which starts below the bar (below the title bar on pages
+  without it). Nothing passes behind the bar or the title bar any more; the
+  window-scrolling layout let content show through both and made the bar
+  jump 12 px. One scroll per page: Match History's table and the two
+  Champions columns (≥ 1201 px wide) fill the area and scroll themselves;
+  Allies' column headers stick. Pages keep only the gutter as top padding.
+  `switchTopTab` remembers each page's scroll position. **Scroll
+  `#pageScroll`, never `window`**; `body.modal-open` locks `#pageScroll`.
+  `#matchHistory` is shown with `style.display = ''` (CSS makes it flex).
 - The toast moved to page level too: inside `#analytics-tab` it was hidden on
   every other page.
 

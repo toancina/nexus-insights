@@ -57,7 +57,8 @@
         if (typeof window.switchTopTab === 'function') window.switchTopTab('analytics');
         const btn = document.querySelector(`.analytical-tab[data-tab="${CSS.escape(tab)}"]`);
         if (btn) btn.click();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // Pages scroll in #pageScroll, not the window (#80)
+        document.getElementById('pageScroll')?.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // ── Helpers ──────────────────────────────────────────────────────────────

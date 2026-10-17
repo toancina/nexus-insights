@@ -841,7 +841,7 @@ window.loadMatchHistory = async function (skipRankFetch = false) {
 
         if (matches.length > 0) {
             document.getElementById('unifiedStatsSection').style.display = 'block';
-            document.getElementById('matchHistory').style.display        = 'block';
+            document.getElementById('matchHistory').style.display        = '';   // CSS decides (flex on Match History, #80)
             const filterSection = document.getElementById('filterSection');
             if (filterSection) filterSection.style.display = 'flex';
             if (typeof window.initCalendar === 'function') window.initCalendar();
@@ -1118,8 +1118,14 @@ function updateTopBar(tab) {
     }
 }
 
+// Pages share one scroll area (#80); each keeps its own position in it
+const pageScrollTops = {};
+let shownTopTab = 'analytics';
+
 window.switchTopTab = function (tab) {
     if (!TOP_TABS[tab]) tab = 'analytics';
+    const scroller = document.getElementById('pageScroll');
+    if (scroller) pageScrollTops[shownTopTab] = scroller.scrollTop;
 
     for (const [name, ids] of Object.entries(TOP_TABS)) {
         const panel = document.getElementById(ids.panel);
@@ -1129,6 +1135,8 @@ window.switchTopTab = function (tab) {
         if (nav)   nav.classList.toggle('active', on);
     }
     updateTopBar(tab);
+    if (scroller) scroller.scrollTop = pageScrollTops[tab] || 0;
+    shownTopTab = tab;
 
     // Picking a section is the end of the interaction — get the drawer out
     // of the way so the page it just revealed is actually visible.

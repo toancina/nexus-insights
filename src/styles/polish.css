@@ -842,8 +842,10 @@ body {
    ========================================================================== */
 .top-bar {
     display: none;
-    position: sticky;
-    top: var(--titlebar-height);
+    /* In the flow above the page scroll area, not sticky over it (#80);
+       relative so its dropdowns layer above the pages */
+    position: relative;
+    flex: none;
     z-index: var(--z-topbar);
     margin-top: calc(var(--titlebar-height) + var(--gutter));
     padding: 0 var(--gutter);
@@ -957,4 +959,96 @@ img.item-missing {
     box-sizing: border-box;
     min-width: 16px;
     min-height: 16px;
+}
+
+/* ==========================================================================
+   Page scroll area (#80) — the app-shell layout. The window never scrolls:
+   the title bar, nav rail and top bar stay put, and every page scrolls in
+   #pageScroll, which starts below the top bar (below the title bar on pages
+   without it), so content is clipped there instead of sliding behind them.
+   One scroll per page: Match History's table and the two Champions columns
+   fill the area and scroll themselves, so the area itself doesn't move.
+   ========================================================================== */
+html, body { height: 100%; overflow: hidden; }
+body { display: flex; flex-direction: column; }
+
+.page-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+body:not(.has-top-bar) .page-scroll { margin-top: var(--titlebar-height); }
+/* A dialog is open: the page behind it doesn't scroll (#63) */
+body.modal-open .page-scroll { overflow: hidden; }
+
+/* The area already starts below the title bar: pages keep only the gutter */
+.page-scroll .app-container,
+.page-scroll .champions-shell,
+.page-scroll .coaching-shell,
+.page-scroll .skins-shell,
+.page-scroll .chat-shell { padding-top: var(--gutter); }
+
+/* Chat fills the area; its messages scroll inside */
+#chat-tab { height: 100%; }
+.page-scroll .chat-shell { height: 100%; }
+
+/* Match History: the table fills the area and is the only thing that scrolls */
+#history-tab { height: 100%; }
+#history-tab > .app-container {
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+#history-tab .main-card,
+#history-tab .match-history,
+#history-tab .match-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+#history-tab .match-history[style*="none"] { display: none; }
+#history-tab .section-header,
+#history-tab .load-more-bar { flex: none; }
+#history-tab .match-table-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+}
+
+/* Champions: list and detail scroll on their own, side by side. Below
+   1200px they stack (app.css), and the page scrolls as one instead. */
+@media (min-width: 1201px) {
+    #champions-tab { height: 100%; }
+    #champions-tab > .champions-shell {
+        height: 100%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        padding-bottom: var(--gutter);
+    }
+    #champions-tab .champions-layout {
+        flex: 1 1 auto;
+        min-height: 0;
+        align-items: stretch;
+    }
+    #champions-tab .champions-list,
+    #champions-tab .champions-detail {
+        max-height: none;
+        min-height: 0;
+        overflow: auto;
+    }
+}
+
+/* Allies: column headers stay at the top of the scroll area. `clip` keeps
+   the rounded corners without making the list a scroll container, which
+   would stop the headers sticking. */
+.teammates-list { overflow: clip; }
+.tm-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    background: rgba(18, 20, 28, 0.97);
 }
