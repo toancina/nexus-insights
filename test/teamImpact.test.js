@@ -104,3 +104,13 @@ test('participants without participantId fall back to their position', () => {
     const impact = computeTeamImpact(players);
     assert.deepEqual([...impact.keys()], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 });
+
+test('no ranks for games without 10 players, e.g. Arena (#68)', () => {
+    const arena = Array.from({ length: 16 }, (_, i) => ({
+        ...lobby()[i % 10], participantId: i + 1, teamId: 100 + Math.floor(i / 2), win: i < 2,
+    }));
+    assert.equal(computeTeamImpact(arena).size, 0);
+    assert.equal(impactFor(arena, arena[0].championName, arena[0].teamId), null);
+    assert.equal(computeTeamImpact(lobby().slice(0, 9)).size, 0);
+    assert.equal(computeTeamImpact(lobby()).size, 10);
+});

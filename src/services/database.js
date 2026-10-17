@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { compressJson } = require('./compression');
 const { userDataPath } = require('./paths');
+const { ALLOWED_QUEUES } = require('./queues');
 const { absoluteLp, attributeReadings, deltasByMatch } = require('./lpAttribution');
 
 const dbPath = path.join(userDataPath, 'nexus_data.sqlite');
@@ -64,6 +65,32 @@ async function runMigrations() {
   await migrateLpGameCounts();
   await migrateLpCheckpoints();
   await migrateRecomputePlatesAndObjectiveRate();
+  await migrateUnsupportedQueues();
+}
+
+/**
+ * Migration 7 — games from queues the app doesn't support (#68). Before sync
+ * kept only ALLOWED_QUEUES, a few Arena games (queue 1700, 16 players) were
+ * stored. Every page hides them, but Chat's "all queues" counted them, and
+ * their team-impact ranks (14 and 15 "of 10") were meaningless. Removes them
+ * and their match_teammates rows, once.
+ */
+async function migrateUnsupportedQueues() {
+  const done = await dbGetAsync('SELECT version FROM schema_version WHERE version = 7');
+  if (done) return;
+  const allowed = [...ALLOWED_QUEUES].join(',');
+  const gone = await dbAllAsync(`SELECT matchId, queueId FROM matches WHERE queueId IS NULL OR queueId NOT IN (${allowed})`);
+  if (gone.length) {
+    const tables = (await dbAllAsync("SELECT name FROM sqlite_master WHERE type = 'table'")).map(t => t.name);
+    if (tables.includes('match_teammates')) {
+      await dbRunAsync(`DELETE FROM match_teammates WHERE matchId IN (SELECT matchId FROM matches WHERE queueId IS NULL OR queueId NOT IN (${allowed}))`);
+    }
+    await dbRunAsync(`DELETE FROM matches WHERE queueId IS NULL OR queueId NOT IN (${allowed})`);
+  }
+  await dbRunAsync('INSERT INTO schema_version (version, applied_at) VALUES (7, ?)', [Date.now()]);
+  const byQueue = {};
+  for (const g of gone) byQueue[g.queueId] = (byQueue[g.queueId] || 0) + 1;
+  console.log(`Migration 7 complete — removed ${gone.length} game(s) from unsupported queues${gone.length ? ' ' + JSON.stringify(byQueue) : ''}.`);
 }
 
 /**
@@ -747,5 +774,5 @@ module.exports = {
   saveLpSnapshot, getLpHistory,
   recordLpReading, getLpReadings, attachLpReadingsToMatches,
   getLpDeltasByMatch, absoluteLp,
-  migrateLpCheckpoints, addLpCheckpoint, deleteLpCheckpoint, getLpCheckpoints
+  migrateLpCheckpoints, migrateUnsupportedQueues, addLpCheckpoint, deleteLpCheckpoint, getLpCheckpoints
 };

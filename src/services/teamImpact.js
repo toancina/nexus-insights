@@ -43,9 +43,12 @@ function compareImpact(a, b) {
 /**
  * @param {Array} participants  rawJson.info.participants
  * @returns {Map<number, {score, rank, tag, shares}>} keyed by participantId;
- *          shares are percentages (0–100), null for a skipped area
+ *          shares are percentages (0–100), null for a skipped area;
+ *          empty unless there are exactly 10 players
  */
 function computeTeamImpact(participants) {
+    // Ranks are "of 10": other modes (Arena has 16 players in pairs) get none (#68)
+    if (!participants || participants.length !== 10) return new Map();
     const players = (participants || []).map((p, i) => ({
         p, id: p.participantId || i + 1,
         values: Object.fromEntries(IMPACT_AREAS.map(([key, , get]) => [key, get(p)])),
