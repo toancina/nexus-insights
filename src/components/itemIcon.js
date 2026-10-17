@@ -2,20 +2,24 @@
  * itemIcon.js — item icon <img> markup shared by the match table, the
  * expanded match row and the Champions page (#67).
  *
- * Icons come from the Data Dragon version of the game's own patch, so items
- * removed since then still show. If an icon fails anyway it is retried from
- * the current version, then replaced by a "removed item" placeholder: the
- * same in every view, never a broken image.
+ * Items still in the game use the current version (one URL per item, so the
+ * browser cache shares it across every game). Items that have been removed
+ * since (not in today's item.json) come from the Data Dragon version of the
+ * game's own patch, where they still exist. Per-patch URLs for every item
+ * meant ~20× the downloads on "Load All". If an icon fails anyway it is
+ * retried from the current version, then replaced by a "removed item"
+ * placeholder: the same in every view, never a broken image.
  */
 
-const { getDDragonBase, getVersions } = require('../services/dataDragon');
+const { getDDragonBase, getVersions, getItemData, isGameDataLoaded } = require('../services/dataDragon');
 const { ddragonVersionForPatch } = require('../services/patches');
 
 const CDN = 'https://ddragon.leagueoflegends.com/cdn';
 
-/** URL of an item icon, for the game's patch when known. */
+/** URL of an item icon: current version, or the game's patch for a removed item. */
 function itemIconUrl(id, patch) {
-    const version = ddragonVersionForPatch(patch, getVersions());
+    const removed = isGameDataLoaded() && !getItemData(Number(id));
+    const version = removed ? ddragonVersionForPatch(patch, getVersions()) : null;
     const base = version ? `${CDN}/${version}` : getDDragonBase();
     return `${base}/img/item/${Number(id)}.png`;
 }
