@@ -412,123 +412,6 @@
             </div>
         </div>
 
-        <!-- Setup Modal (First-time setup / Settings) -->
-        <div class="modal-overlay" id="setupModal" role="dialog" aria-modal="true" aria-labelledby="setupModal-title">
-            <div class="modal-content setup-modal">
-                <button class="modal-close setup-close" onclick="hideSetupModal()">&times;</button>
-                <div class="setup-header">
-                    <h2 class="setup-title" id="setupModal-title">Welcome to Nexus Insights</h2>
-                    <p class="setup-subtitle">Enter your details to get started</p>
-                </div>
-                <div class="setup-body">
-                    <div class="setup-field">
-                        <label class="setup-label" for="setupApiKey">Riot API Key</label>
-                        <input type="password" id="setupApiKey" class="setup-input"
-                            placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-                        <p class="setup-hint">Free: sign in at <a href="#"
-                                onclick="require('electron').shell.openExternal('https://developer.riotgames.com'); return false;">developer.riotgames.com</a>
-                            with your League account and copy the <b>Development API Key</b>.
-                            It expires every 24 hours, so paste a new one here when syncing stops working.
-                        </p>
-                    </div>
-                    <div class="setup-row">
-                        <div class="setup-field">
-                            <label class="setup-label" for="setupGameName">Riot ID name</label>
-                            <input type="text" id="setupGameName" class="setup-input" placeholder="YourName">
-                        </div>
-                        <div class="setup-field setup-tag">
-                            <label class="setup-label" for="setupTagLine">Tag</label>
-                            <input type="text" id="setupTagLine" class="setup-input" placeholder="EUW" title="The part after # in your Riot ID">
-                        </div>
-                    </div>
-                    <div class="setup-row">
-                        <div class="setup-field">
-                            <label class="setup-label" for="setupPlatform">Server</label>
-                            <select id="setupPlatform" class="setup-input" onchange="syncRegionToPlatform()">
-                                <option value="euw1">EUW</option>
-                                <option value="eun1">EUNE</option>
-                                <option value="na1">NA</option>
-                                <option value="kr">KR</option>
-                                <option value="br1">BR</option>
-                                <option value="la1">LAN</option>
-                                <option value="la2">LAS</option>
-                                <option value="oc1">OCE</option>
-                                <option value="tr1">TR</option>
-                                <option value="ru">RU</option>
-                                <option value="me1">ME</option>
-                                <option value="jp1">JP</option>
-                                <option value="ph2">PH</option>
-                                <option value="sg2">SG</option>
-                                <option value="th2">TH</option>
-                                <option value="tw2">TW</option>
-                                <option value="vn2">VN</option>
-                            </select>
-                        </div>
-                        <div class="setup-field">
-                            <!-- Set automatically from the server: Riot's routing is fixed per
-                                 server, and choosing it separately let the two disagree. -->
-                            <label class="setup-label" for="setupRegion">Region (automatic)</label>
-                            <select id="setupRegion" class="setup-input" disabled
-                                    title="Set automatically from your server">
-                                <option value="europe">Europe</option>
-                                <option value="americas">Americas</option>
-                                <option value="asia">Asia</option>
-                                <option value="sea">SEA / Oceania</option>
-                            </select>
-                        </div>
-                    </div>
-                    <!-- Background behaviour. Riot publishes no LP history, so
-                         the app can only work out per-match LP by observing it
-                         while running — hence the option to keep it alive. -->
-                    <div class="setup-toggles">
-                        <label class="setup-toggle">
-                            <input type="checkbox" id="setupAutoLogGames" checked>
-                            <span class="setup-toggle-text">
-                                <span class="setup-toggle-title">Log games automatically</span>
-                                <span class="setup-toggle-hint">Watches the League client on this PC to detect when a game ends, then syncs it and records the LP change. The Sync button still works manually.</span>
-                            </span>
-                        </label>
-                        <label class="setup-toggle">
-                            <input type="checkbox" id="setupCloseToTray" checked>
-                            <span class="setup-toggle-text">
-                                <span class="setup-toggle-title">Close to tray</span>
-                                <span class="setup-toggle-hint">X hides the window instead of quitting, so LP tracking keeps running.</span>
-                            </span>
-                        </label>
-                        <label class="setup-toggle" id="setupStartOnLoginRow">
-                            <input type="checkbox" id="setupStartOnLogin" checked>
-                            <span class="setup-toggle-text">
-                                <span class="setup-toggle-title" id="setupStartOnLoginTitle">Start with Windows</span>
-                                <span class="setup-toggle-hint">Launches hidden in the tray at login, ready before your first game.</span>
-                            </span>
-                        </label>
-                    </div>
-
-                    <p id="setupError" class="setup-error" style="display: none;"></p>
-                    <button id="setupSaveBtn" class="setup-save-btn" onclick="saveSetup()">Save &amp; Start</button>
-
-                    <!-- Where the app actually keeps its data. Windows expects
-                         app data in AppData, not next to the source, so this
-                         just makes that location easy to reach. -->
-                    <div class="setup-datadir">
-                        <span class="setup-datadir-label">Your data (database &amp; settings) is stored in</span>
-                        <code class="setup-datadir-path" id="dataDirPath">…</code>
-                        <button type="button" class="setup-datadir-btn" onclick="openDataFolder()">Open folder</button>
-                    </div>
-                    <div class="setup-datadir">
-                        <span class="setup-datadir-label">Export the matches your current filters show, one row per game, for a spreadsheet</span>
-                        <button type="button" class="setup-datadir-btn" onclick="exportMatchesCsv()">Export matches to CSV</button>
-                    </div>
-                    <div class="setup-datadir">
-                        <span class="setup-datadir-label">Missing games? A sync that was interrupted in the past can have skipped some. This fetches every game since the season started that isn't stored yet.</span>
-                        <button type="button" class="setup-datadir-btn" onclick="fillGapsFromSettings()">Fill gaps</button>
-                    </div>
-                    <!-- Riot's developer policy asks public apps to carry this notice;
-                         it lives here now instead of a footer on every page. -->
-                    <p class="setup-legal">Nexus Insights isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc. Match data from the <a href="#" onclick="require('electron').shell.openExternal('https://developer.riotgames.com'); return false;">Riot Games API</a>.</p>
-                </div>
-            </div>
-        </div>
 
     </div> <!-- End Analytics Tab -->
 
@@ -691,6 +574,125 @@
         </div>
     </div>
 
+
+    <!-- Setup Modal (first-time setup / Settings): at page level, outside every
+         page container, so its layer (--z-modal) is above the whole app (#63) -->
+    <div class="modal-overlay" id="setupModal" role="dialog" aria-modal="true" aria-labelledby="setupModal-title">
+        <div class="modal-content setup-modal">
+            <button class="modal-close setup-close" onclick="hideSetupModal()">&times;</button>
+            <div class="setup-header">
+                <h2 class="setup-title" id="setupModal-title">Welcome to Nexus Insights</h2>
+                <p class="setup-subtitle">Enter your details to get started</p>
+            </div>
+            <div class="setup-body">
+                <div class="setup-field">
+                    <label class="setup-label" for="setupApiKey">Riot API Key</label>
+                    <input type="password" id="setupApiKey" class="setup-input"
+                        placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                    <p class="setup-hint">Free: sign in at <a href="#"
+                            onclick="require('electron').shell.openExternal('https://developer.riotgames.com'); return false;">developer.riotgames.com</a>
+                        with your League account and copy the <b>Development API Key</b>.
+                        It expires every 24 hours, so paste a new one here when syncing stops working.
+                    </p>
+                </div>
+                <div class="setup-row">
+                    <div class="setup-field">
+                        <label class="setup-label" for="setupGameName">Riot ID name</label>
+                        <input type="text" id="setupGameName" class="setup-input" placeholder="YourName">
+                    </div>
+                    <div class="setup-field setup-tag">
+                        <label class="setup-label" for="setupTagLine">Tag</label>
+                        <input type="text" id="setupTagLine" class="setup-input" placeholder="EUW" title="The part after # in your Riot ID">
+                    </div>
+                </div>
+                <div class="setup-row">
+                    <div class="setup-field">
+                        <label class="setup-label" for="setupPlatform">Server</label>
+                        <select id="setupPlatform" class="setup-input" onchange="syncRegionToPlatform()">
+                            <option value="euw1">EUW</option>
+                            <option value="eun1">EUNE</option>
+                            <option value="na1">NA</option>
+                            <option value="kr">KR</option>
+                            <option value="br1">BR</option>
+                            <option value="la1">LAN</option>
+                            <option value="la2">LAS</option>
+                            <option value="oc1">OCE</option>
+                            <option value="tr1">TR</option>
+                            <option value="ru">RU</option>
+                            <option value="me1">ME</option>
+                            <option value="jp1">JP</option>
+                            <option value="ph2">PH</option>
+                            <option value="sg2">SG</option>
+                            <option value="th2">TH</option>
+                            <option value="tw2">TW</option>
+                            <option value="vn2">VN</option>
+                        </select>
+                    </div>
+                    <div class="setup-field">
+                        <!-- Set automatically from the server: Riot's routing is fixed per
+                             server, and choosing it separately let the two disagree. -->
+                        <label class="setup-label" for="setupRegion">Region (automatic)</label>
+                        <select id="setupRegion" class="setup-input" disabled
+                                title="Set automatically from your server">
+                            <option value="europe">Europe</option>
+                            <option value="americas">Americas</option>
+                            <option value="asia">Asia</option>
+                            <option value="sea">SEA / Oceania</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Background behaviour. Riot publishes no LP history, so
+                     the app can only work out per-match LP by observing it
+                     while running — hence the option to keep it alive. -->
+                <div class="setup-toggles">
+                    <label class="setup-toggle">
+                        <input type="checkbox" id="setupAutoLogGames" checked>
+                        <span class="setup-toggle-text">
+                            <span class="setup-toggle-title">Log games automatically</span>
+                            <span class="setup-toggle-hint">Watches the League client on this PC to detect when a game ends, then syncs it and records the LP change. The Sync button still works manually.</span>
+                        </span>
+                    </label>
+                    <label class="setup-toggle">
+                        <input type="checkbox" id="setupCloseToTray" checked>
+                        <span class="setup-toggle-text">
+                            <span class="setup-toggle-title">Close to tray</span>
+                            <span class="setup-toggle-hint">X hides the window instead of quitting, so LP tracking keeps running.</span>
+                        </span>
+                    </label>
+                    <label class="setup-toggle" id="setupStartOnLoginRow">
+                        <input type="checkbox" id="setupStartOnLogin" checked>
+                        <span class="setup-toggle-text">
+                            <span class="setup-toggle-title" id="setupStartOnLoginTitle">Start with Windows</span>
+                            <span class="setup-toggle-hint">Launches hidden in the tray at login, ready before your first game.</span>
+                        </span>
+                    </label>
+                </div>
+
+                <p id="setupError" class="setup-error" style="display: none;"></p>
+                <button id="setupSaveBtn" class="setup-save-btn" onclick="saveSetup()">Save &amp; Start</button>
+
+                <!-- Where the app actually keeps its data. Windows expects
+                     app data in AppData, not next to the source, so this
+                     just makes that location easy to reach. -->
+                <div class="setup-datadir">
+                    <span class="setup-datadir-label">Your data (database &amp; settings) is stored in</span>
+                    <code class="setup-datadir-path" id="dataDirPath">…</code>
+                    <button type="button" class="setup-datadir-btn" onclick="openDataFolder()">Open folder</button>
+                </div>
+                <div class="setup-datadir">
+                    <span class="setup-datadir-label">Export the matches your current filters show, one row per game, for a spreadsheet</span>
+                    <button type="button" class="setup-datadir-btn" onclick="exportMatchesCsv()">Export matches to CSV</button>
+                </div>
+                <div class="setup-datadir">
+                    <span class="setup-datadir-label">Missing games? A sync that was interrupted in the past can have skipped some. This fetches every game since the season started that isn't stored yet.</span>
+                    <button type="button" class="setup-datadir-btn" onclick="fillGapsFromSettings()">Fill gaps</button>
+                </div>
+                <!-- Riot's developer policy asks public apps to carry this notice;
+                     it lives here now instead of a footer on every page. -->
+                <p class="setup-legal">Nexus Insights isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc. Match data from the <a href="#" onclick="require('electron').shell.openExternal('https://developer.riotgames.com'); return false;">Riot Games API</a>.</p>
+            </div>
+        </div>
+    </div>
 
     <!-- Game Tooltip for Items/Runes -->
     <div id="gameTooltip" class="game-tooltip" role="tooltip" style="display: none;">

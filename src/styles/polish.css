@@ -1,4 +1,23 @@
 /* ==========================================================================
+   Layer scale (#63): every z-index in the app uses one of these. Pages are not
+   their own layers (.app-container has no z-index), so these compare across
+   the whole window. test/zindex.test.js fails on a raw number.
+   ========================================================================== */
+:root {
+    --z-below:    -1;    /* background glow, under everything */
+    --z-local:     5;    /* raised inside a card: chart tooltips, hover cells */
+    --z-sticky:   10;    /* sticky table headers */
+    --z-topbar:   40;    /* the shared top bar (#52) */
+    --z-nav:     100;    /* the nav rail */
+    --z-popover: 500;    /* dropdowns and popovers: calendar picker, LP checkpoints */
+    --z-modal:  1000;    /* dialogs and their backdrop (Settings) */
+    --z-toast:  1100;    /* toasts, above a dialog */
+    --z-tooltip: 1200;   /* item / rune tooltip */
+    --z-confetti: 1300;  /* Coaching celebration */
+    --z-titlebar: 2000;  /* title bar last, so the window buttons always work */
+}
+
+/* ==========================================================================
    polish.css — consistency pass (2026-10), loaded AFTER app.css.
 
    One small set of rules the whole app snaps to, instead of the dozens of
@@ -189,7 +208,7 @@
     right: 0;
     bottom: 50%;
     border-top: 1px dashed rgba(255, 255, 255, 0.18);
-    z-index: 1;
+    z-index: var(--z-local);
     pointer-events: none;
 }
 .day-bar-label { color: var(--text-secondary); }
@@ -825,7 +844,7 @@ body {
     display: none;
     position: sticky;
     top: var(--titlebar-height);
-    z-index: 40;
+    z-index: var(--z-topbar);
     margin-top: calc(var(--titlebar-height) + var(--gutter));
     padding: 0 var(--gutter);
 }
@@ -921,3 +940,6 @@ body.has-top-bar .champions-shell { padding-top: var(--gutter); }
 @media (max-width: 1100px) {
     .coach-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* A dialog is open: the page doesn't scroll behind it (#63) */
+body.modal-open { overflow: hidden; }

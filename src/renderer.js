@@ -146,10 +146,12 @@ function showSetupModal(isFirstTime = true) {
     }
 
     modal.classList.add('visible');
+    document.body.classList.add('modal-open');   // the page doesn't scroll behind the dialog (#63)
 }
 
 function hideSetupModal() {
     document.getElementById('setupModal').classList.remove('visible');
+    document.body.classList.remove('modal-open');
 }
 
 function openSettings() {
