@@ -865,6 +865,9 @@ body.has-top-bar .top-bar { display: block; }
 body.has-top-bar .app-container,
 body.has-top-bar .champions-shell { padding-top: var(--gutter); }
 
+/* The account shown in the top bar is set in Settings (#73): click opens it */
+.top-bar .input-field[readonly] { cursor: pointer; }
+
 /* A filter the current page ignores: visibly off (see renderer TOP_BAR_PAGES) */
 .top-bar select:disabled {
     opacity: 0.4;

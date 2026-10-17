@@ -5,7 +5,6 @@
  * (defined in renderer.js) at runtime so there are no circular deps.
  */
 
-const { getPuuidByRiotId }    = require('../services/riotApi');
 const {
     syncMatches,
     fillGaps,
@@ -119,12 +118,17 @@ function hideProgress() {
  */
 window.handleSync = async function (options = {}) {
     const auto   = options.auto === true;
+    // Always the configured account: the top bar only shows it (#73). Typing
+    // someone else's Riot ID there used to store their games as yours.
     const config = loadConfig();
-    const name = document.getElementById('gameName').value.trim() || (auto ? config.gameName : '');
-    const tag  = document.getElementById('tagLine').value.trim()  || (auto ? config.tagLine  : '');
+    const name = (config.gameName || '').trim();
+    const tag  = (config.tagLine  || '').trim();
 
     if (!name || !tag) {
-        if (!auto) updateStatus('error', 'Missing Information', 'Please enter both your game name and tag');
+        if (!auto) {
+            updateStatus('error', 'No Account Set', 'Add your Riot ID in Settings first');
+            if (typeof window.openSettings === 'function') window.openSettings();
+        }
         return;
     }
     if (syncCooldownInterval && !auto) {
@@ -141,7 +145,7 @@ window.handleSync = async function (options = {}) {
 
     try {
         updateStatus('loading', 'Finding Account', `Looking up ${name}#${tag}...`);
-        const puuid = await getPuuidByRiotId(name, tag);
+        const puuid = await window.currentAccountPuuid();
 
         // Fetch rank before heavy API calls to avoid rate-limit issues
         await window.fetchAndDisplayRankData();
