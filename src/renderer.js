@@ -2,7 +2,8 @@
 // IMPORTS — services (browser context, Node via nodeIntegration)
 // ============================================================
 const { ipcRenderer } = window.require('electron');
-const { getPuuidByRiotId, PLATFORM_ROUTING } = window.require('./services/riotApi');
+const { getPuuidByRiotId, verifyAccount, PLATFORM_ROUTING } = window.require('./services/riotApi');
+const { verifyProblem } = window.require('./services/setupCheck');
 const { getLiveGame, testConnection } = window.require('./services/liveClient');
 const {
     getMatches, getStats, getMatchById, getLeagueData,
@@ -109,7 +110,14 @@ window.showToast = showToast;
 // SETUP / CONFIG MODAL
 // ============================================================
 
+// First-run setup ends with the first sync (#74)
+let setupIsFirstRun = false;
+// Details that failed the Riot check: a second Save keeps them anyway
+let uncheckedSave = '';
+
 function showSetupModal(isFirstTime = true) {
+    setupIsFirstRun = isFirstTime;
+    uncheckedSave = '';
     const modal    = document.getElementById('setupModal');
     const title    = modal.querySelector('.setup-title');
     const subtitle = modal.querySelector('.setup-subtitle');
@@ -220,7 +228,7 @@ window.openDataFolder = function () {
     }
 };
 
-window.saveSetup = function () {
+window.saveSetup = async function () {
     const apiKey   = document.getElementById('setupApiKey').value.trim();
     const gameName = document.getElementById('setupGameName').value.trim();
     const tagLine  = document.getElementById('setupTagLine').value.trim();
@@ -257,6 +265,41 @@ window.saveSetup = function () {
         if (!ok) return;
     }
 
+    // Check new details with Riot before saving (#74), so an expired key, a
+    // typo in the Riot ID or the wrong server shows up here and not as a
+    // failed first sync. Unchanged details aren't checked again; offline, they
+    // are saved unchecked; a second Save keeps details that failed.
+    const attempt = JSON.stringify([apiKey, gameName, tagLine, platform]);
+    const unchanged = before.apiKey === apiKey && before.gameName === gameName &&
+                      before.tagLine === tagLine && before.platform === platform;
+    let checked = unchanged;
+    let uncheckedNote = null;
+    if (!unchanged && attempt !== uncheckedSave) {
+        const btn = document.getElementById('setupSaveBtn');
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Checking with Riot…';
+        errorEl.style.display = 'none';
+        try {
+            await verifyAccount({ apiKey, gameName, tagLine, platform });
+            checked = true;
+        } catch (err) {
+            const select = document.getElementById('setupPlatform');
+            const serverName = select.options[select.selectedIndex]?.text || platform;
+            const problem = verifyProblem(err, { gameName, tagLine, serverName });
+            if (!problem.offline) {
+                errorEl.textContent   = `${problem.message} Press ${label} again to keep these details anyway.`;
+                errorEl.style.display = 'block';
+                uncheckedSave = attempt;
+                return;
+            }
+            uncheckedNote = problem.message;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = label;
+        }
+    }
+
     // Merge, don't replace: config.json also holds the skin, custom background
     // and coaching state, which this dialog doesn't show. Replacing the whole
     // object used to silently wipe them on every Settings save.
@@ -270,10 +313,14 @@ window.saveSetup = function () {
         // Pick up an autoLogGames change without needing a restart
         if (typeof window.restartLpWatcher === 'function') window.restartLpWatcher();
 
+        const firstRun = setupIsFirstRun;
         hideSetupModal();
         document.getElementById('gameName').value = gameName;
         document.getElementById('tagLine').value  = tagLine;
-        window.loadMatchHistory();
+        if (uncheckedNote) showToast('Saved without checking', uncheckedNote, 6000);
+        await window.loadMatchHistory();
+        // A new user's next step is always the first sync: start it (#74)
+        if (firstRun && checked && (window.matchesData || []).length === 0) window.handleSync();
     } else {
         errorEl.textContent  = 'Failed to save configuration. Please try again.';
         errorEl.style.display = 'block';
@@ -288,6 +335,7 @@ function checkConfigOnStartup() {
         return true;
     }
     showSetupModal(true);
+    renderEmptyState(0);          // what's behind the dialog if it's closed (#74)
     return false;
 }
 
@@ -793,6 +841,26 @@ window.renderFilteredMatches = async function (opts = {}) {
 // ============================================================
 // LOAD MATCH HISTORY  (called on startup and after sync)
 // ============================================================
+/**
+ * Analytics with no games (#74): say what to do next instead of a blank
+ * page. No account yet → Settings; otherwise → the first sync.
+ */
+function renderEmptyState(gameCount) {
+    const el = document.getElementById('analyticsEmpty');
+    if (!el) return;
+    el.hidden = gameCount > 0;
+    if (gameCount > 0) return;
+    const configured = isConfigValid(loadConfig());
+    el.querySelector('.empty-title').textContent = configured ? 'No games yet' : 'Set up your account';
+    el.querySelector('.empty-text').textContent = configured
+        ? 'Sync Matches downloads every game you have played since January 1. With a development key Riot allows 100 calls every 2 minutes, so a first sync of a few hundred games takes a while; the progress bar above shows how far it is, and the stats appear when it finishes.'
+        : 'Add your Riot API key and Riot ID in Settings. The app then downloads your games from Riot and keeps them on this PC.';
+    const btn = el.querySelector('.empty-action');
+    btn.textContent = configured ? 'Sync Matches' : 'Open Settings';
+    btn.onclick = () => (configured ? window.handleSync() : openSettings());
+}
+window.renderEmptyState = renderEmptyState;
+
 window.loadMatchHistory = async function (skipRankFetch = false) {
     try {
         // A Riot ID not resolved yet (just changed in Settings, or a database
@@ -839,6 +907,7 @@ window.loadMatchHistory = async function (skipRankFetch = false) {
         // The rank fetch found the account's PUUID changed: load again with it
         if (accountChanged) { accountChanged = false; return window.loadMatchHistory(true); }
 
+        renderEmptyState(matches.length);
         if (matches.length > 0) {
             document.getElementById('unifiedStatsSection').style.display = 'block';
             document.getElementById('matchHistory').style.display        = 'block';

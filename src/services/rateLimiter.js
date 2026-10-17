@@ -97,9 +97,11 @@ class RateLimiter {
      * @param {() => Promise<any>} fn
      * @param {object} [opts]
      * @param {string} [opts.label] - shown in log output
+     * @param {number} [opts.retries] - instead of maxRetries (0: fail fast)
      */
     async request(fn, opts = {}) {
         const label = opts.label ? ` (${opts.label})` : '';
+        const maxRetries = Number.isInteger(opts.retries) ? opts.retries : this.maxRetries;
 
         for (let attempt = 0; ; attempt++) {
             await this.acquire();
@@ -110,7 +112,7 @@ class RateLimiter {
                 // No response at all = network blip, worth retrying
                 const retryable = status === undefined || RETRYABLE_STATUS.has(status);
 
-                if (!retryable || attempt >= this.maxRetries) throw err;
+                if (!retryable || attempt >= maxRetries) throw err;
 
                 let waitMs;
                 if (status === 429) {
@@ -124,7 +126,7 @@ class RateLimiter {
                     this.pauseFor(waitMs);
                 } else {
                     waitMs = this._backoff(attempt);
-                    this.log(`${status ?? 'network error'}${label} — retry ${attempt + 1}/${this.maxRetries} in ${waitMs}ms`);
+                    this.log(`${status ?? 'network error'}${label} — retry ${attempt + 1}/${maxRetries} in ${waitMs}ms`);
                 }
 
                 await this.sleep(waitMs);

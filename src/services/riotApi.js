@@ -64,8 +64,9 @@ function getAccountRegion() {
  * parameter — query strings end up in proxy logs, crash reports and browser
  * history, headers generally don't.
  */
-function riotGet(url, { params, label, timeout = 15000 } = {}) {
-    const apiKey = getApiKey();
+function riotGet(url, { params, label, timeout = 15000, apiKey: keyOverride = null, retries } = {}) {
+    // keyOverride: Settings checks a key before it is saved (#74)
+    const apiKey = keyOverride || getApiKey();
     if (!apiKey) throw new Error('No Riot API key configured — open Settings and add one.');
 
     return limiter.request(
@@ -74,7 +75,7 @@ function riotGet(url, { params, label, timeout = 15000 } = {}) {
             timeout,
             headers: { 'X-Riot-Token': apiKey },
         }),
-        { label }
+        { label, retries }
     ).then(res => res.data);
 }
 
@@ -153,6 +154,30 @@ async function getPuuidByRiotId(gameName, tagLine) {
         console.error(`Could not resolve ${gameName}#${tagLine}:`, describeError(error));
         throw error;
     }
+}
+
+/**
+ * Check what Settings is about to save (#74): the key works, the Riot ID
+ * exists, and it has a League account on that server. Two calls, with the
+ * key from the dialog rather than the saved one, and no retries, so an
+ * offline check fails fast. Resolves to the PUUID; a failure carries
+ * `step` ('account' | 'summoner') for riotErrors.verifyProblem().
+ */
+async function verifyAccount({ apiKey, gameName, tagLine, platform }) {
+    const opts = { apiKey, timeout: 10000, retries: 0 };
+    let puuid;
+    try {
+        const data = await riotGet(
+            `https://${accountRoutingFor(platform)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/`
+            + `${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`,
+            { ...opts, label: 'check account' });
+        puuid = data.puuid;
+    } catch (err) { err.step = 'account'; throw err; }
+    try {
+        await riotGet(`https://${platform}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`,
+            { ...opts, label: 'check server' });
+    } catch (err) { err.step = 'summoner'; throw err; }
+    return puuid;
 }
 
 // Get summoner info (needed for the league endpoint)
@@ -240,6 +265,7 @@ function describeError(error) {
 }
 
 module.exports = {
+    verifyAccount,
     getMatchIds, getMatchData, getMatchTimeline,
     getPuuidByRiotId, getSummonerByPuuid, getLeagueByPuuid,
     getChampionMastery, getRecentMatchIds,

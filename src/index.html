@@ -194,6 +194,12 @@
         <div id="analytics-tab">
             <!-- Main Card -->
             <div class="main-card">
+                <!-- No games yet (#74): filled by renderEmptyState() in renderer.js -->
+                <div class="analytics-empty" id="analyticsEmpty" hidden>
+                    <h2 class="empty-title"></h2>
+                    <p class="empty-text"></p>
+                    <button type="button" class="sync-btn empty-action"></button>
+                </div>
                 <!-- Analytical Tabs & Cards -->
                 <div class="unified-stats-section" id="unifiedStatsSection" style="display: none;">
                     
