@@ -243,6 +243,10 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
   1,740-game first sync) and nothing read them. Removed; the `player_ranks`
   table stays. The Live page (#59) fetches ranks on demand and caches them there
 - **Queue filter**: Only stores 420 (Solo), 440 (Flex), 710 (Ranked Premade: the 5-stack ranked queue, League-V4 `RANKED_PREMADE_5x5`; not in Riot's queues.json), 400 (Normal Draft), 430 (Blind), 480 (Swiftplay), 490 (Quickplay), 700 (Clash)
+  (`services/queues.js` `ALLOWED_QUEUES`). `getMatches()` loads only these too, and
+  migration 7 removed the 6 Arena games (queue 1700) stored before the filter
+  existed, since Chat's "all queues" counted them (#68). `computeTeamImpact`
+  returns no ranks unless a game has exactly 10 players.
 - **Rate limiting**: Sequential processing, 150ms delay between every API call
 - **Timestamp format**: the app stores **milliseconds** (`gameCreation`, 13 digits) everywhere, and `riotApi.getMatchIds()` converts to **seconds** (`Math.floor(ms / 1000)`) for Match-V5's `startTime`, which Riot defines in seconds. Pass `getMatchIds` milliseconds; don't remove the conversion (#41: this note used to say Riot takes milliseconds)
 
