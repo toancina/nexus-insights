@@ -1,6 +1,6 @@
 {
   "name": "nexus-insights",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Personal LoL data analysis tool",
   "main": "src/main.js",
   "scripts": {
