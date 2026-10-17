@@ -2,6 +2,7 @@
 
 // Get position icon URL from Community Dragon
 const { escapeHtml } = require('./dom');
+const { itemImg } = require('./itemIcon');
 const { decodePurchases, lastBoughtAt } = require('../services/itemBuild');
 const { formatClock } = require('../services/matchTimeline');
 
@@ -128,7 +129,7 @@ function renderMatchRow(match, index, DDRAGON_BASE, QUEUE_NAMES, getChampionIcon
     const itemSlot = itemId => {
         if (itemId && itemId > 0) {
             const at = bought.has(itemId) ? ` data-bought="${formatClock(bought.get(itemId))}"` : '';
-            return `<div class="table-item-slot has-item"><img src="${DDRAGON_BASE}/img/item/${itemId}.png" alt="Item" data-item-id="${itemId}"${at} onerror="this.style.display='none'"></div>`;
+            return `<div class="table-item-slot has-item">${itemImg(itemId, { patch: match.patch, extra: at })}</div>`;
         }
         return `<div class="table-item-slot"></div>`;
     };

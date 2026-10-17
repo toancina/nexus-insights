@@ -11,6 +11,7 @@
  */
 
 const { championTable, championDetail, sortRows, roleLabel } = require('../services/championStats');
+const { itemImg } = require('./itemIcon');
 const { getItemData, getRuneData } = require('../services/dataDragon');
 const { getChampionIcon, RUNE_ICONS } = require('./matchCard');
 const { escapeHtml } = require('./dom');
@@ -52,7 +53,8 @@ function champIcon(name, cls = 'ch-icon') {
 }
 
 function itemIcon(id) {
-    return `<img class="ch-item" src="${window.DDRAGON_BASE}/img/item/${Number(id)}.png" data-item-id="${Number(id)}" alt="">`;
+    // Many games, many patches: the current version, with the shared fallback (#67)
+    return itemImg(id, { extra: 'class="ch-item"' });
 }
 
 function runeIcon(id, cls = 'ch-rune') {

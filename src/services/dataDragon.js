@@ -23,6 +23,7 @@ function savedVersion() {
 
 // Data Dragon version - fetched dynamically, with fallback
 let DDRAGON_VERSION = pickVersion({ saved: savedVersion() });
+let ALL_VERSIONS = [];
 let DDRAGON_BASE = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}`;
 
 // In-memory cache for game data
@@ -44,6 +45,7 @@ async function fetchLatestVersion() {
         // A stalled connection mustn't hold up loading the game data
         const response = await axios.get('https://ddragon.leagueoflegends.com/api/versions.json', { timeout: 8000 });
         fetched = Array.isArray(response.data) ? response.data[0] : null;
+        if (Array.isArray(response.data)) ALL_VERSIONS = response.data;
     } catch (err) {
         console.warn('Could not fetch Data Dragon version:', err.message);
     }
@@ -184,11 +186,17 @@ function getDDragonVersion() {
     return DDRAGON_VERSION;
 }
 
+/** Every Data Dragon version (newest first), once versions.json has loaded. */
+function getVersions() {
+    return ALL_VERSIONS;
+}
+
 function getDDragonBase() {
     return DDRAGON_BASE;
 }
 
 module.exports = {
+    getVersions,
     pickVersion,
     FALLBACK_VERSION,
     loadGameData,
