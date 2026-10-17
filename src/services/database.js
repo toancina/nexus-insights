@@ -1,10 +1,12 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
-const { compressJson } = require('./compression');
+const { compressJson, decompressJsonAsync } = require('./compression');
 const { userDataPath } = require('./paths');
 const { ALLOWED_QUEUES } = require('./queues');
 const { absoluteLp, attributeReadings, deltasByMatch } = require('./lpAttribution');
+const { loadConfig } = require('./config');
+const { accountScope } = require('./account');
 
 const dbPath = path.join(userDataPath, 'nexus_data.sqlite');
 const db = new sqlite3.Database(dbPath);
@@ -66,6 +68,89 @@ async function runMigrations() {
   await migrateLpCheckpoints();
   await migrateRecomputePlatesAndObjectiveRate();
   await migrateUnsupportedQueues();
+  await migrateAccountTags();
+}
+
+/**
+ * Migration 8 — which account each game and LP reading belongs to (#73).
+ * Sync used whatever Riot ID was in the top bar and stored nothing about it,
+ * so another player's games could land in your history for good. Fills
+ * matches.puuid from each game's own data (the row's player, found by
+ * champion + team as everywhere else; ~1 s for 1,800 games). LP readings
+ * carry no player, so they get the PUUID only when every stored game has the
+ * same one; otherwise they stay untagged (shown for any account).
+ */
+async function migrateAccountTags() {
+  const done = await dbGetAsync('SELECT version FROM schema_version WHERE version = 8');
+  if (done) return;
+  await ensurePuuidColumns();
+  await dbRunAsync('CREATE INDEX IF NOT EXISTS idx_matches_puuid ON matches(puuid)');
+
+  let tagged = 0, unknown = 0, last = '';
+  for (;;) {
+    const batch = await dbAllAsync(
+      `SELECT matchId, championName, teamId, rawJson FROM matches
+       WHERE puuid IS NULL AND rawJson IS NOT NULL AND matchId > ? ORDER BY matchId LIMIT 100`,
+      [last]
+    );
+    if (!batch.length) break;
+    for (const row of batch) {
+      last = row.matchId;
+      let puuid = null;
+      try {
+        const data = await decompressJsonAsync(row.rawJson);
+        const parts = (data && data.info && data.info.participants) || [];
+        const me = parts.find(p => p.championName === row.championName && p.teamId === row.teamId);
+        puuid = me && me.puuid ? me.puuid : null;
+      } catch { /* unreadable: leave untagged */ }
+      if (puuid) { await dbRunAsync('UPDATE matches SET puuid = ? WHERE matchId = ?', [puuid, row.matchId]); tagged++; }
+      else unknown++;
+    }
+  }
+  const owners = await dbAllAsync('SELECT DISTINCT puuid FROM matches WHERE puuid IS NOT NULL');
+  let lpTagged = 0;
+  if (owners.length === 1) {
+    lpTagged = await new Promise((resolve, reject) => db.run(
+      'UPDATE lp_history SET puuid = ? WHERE puuid IS NULL', [owners[0].puuid],
+      function (err) { if (err) reject(err); else resolve(this.changes); }));
+  }
+  await dbRunAsync('INSERT INTO schema_version (version, applied_at) VALUES (8, ?)', [Date.now()]);
+  console.log(`Migration 8 complete — ${tagged} game(s) tagged with their account (${owners.length} account(s)${unknown ? `, ${unknown} unknown` : ''}), ${lpTagged} LP reading(s).`);
+}
+/** matches.puuid comes with the other columns at startup; lp_history's is added here. */
+async function ensurePuuidColumns() {
+  for (const table of ['matches', 'lp_history']) {
+    const cols = (await dbAllAsync(`PRAGMA table_info(${table})`)).map(c => c.name);
+    if (cols.length && !cols.includes('puuid')) await dbRunAsync(`ALTER TABLE ${table} ADD COLUMN puuid TEXT`);
+  }
+}
+
+// The window can query before the main process has added the columns, so the
+// account filter only applies once the column is there (#73).
+const hasPuuidColumn = {};
+async function puuidColumnReady(table) {
+  if (hasPuuidColumn[table]) return true;
+  const cols = (await dbAllAsync(`PRAGMA table_info(${table})`)).map(c => c.name);
+  if (cols.includes('puuid')) hasPuuidColumn[table] = true;
+  return !!hasPuuidColumn[table];
+}
+
+/** { sql, params } limiting `table` (or its alias) to the configured account. */
+async function scopeFor(table, column = 'puuid') {
+  if (!(await puuidColumnReady(table))) return { sql: '1 = 1', params: [] };
+  return accountScope(loadConfig(), column);
+}
+
+/**
+ * The configured Riot ID now resolves to another PUUID (a key from another
+ * Riot project): its rows move to the new one (services/account.js).
+ */
+async function retagAccount(from, to) {
+  if (!from || !to || from === to) return;
+  await ensurePuuidColumns();
+  await dbRunAsync('UPDATE matches SET puuid = ? WHERE puuid = ?', [to, from]);
+  await dbRunAsync('UPDATE lp_history SET puuid = ? WHERE puuid = ?', [to, from]);
+  console.log('Account PUUID changed (new API key project): stored games re-tagged.');
 }
 
 /**
@@ -550,7 +635,8 @@ function initDatabase() {
       'firstDeathAt INTEGER',
       'laneGaps TEXT',
       'itemPurchases TEXT',
-      'deathPositions TEXT'
+      'deathPositions TEXT',
+      'puuid TEXT'                 // whose game this is (#73)
     ];
     // Only ALTER for columns that are actually missing — the old code fired
     // ~60 failing ALTERs on every launch. This also acts as the completion
@@ -581,8 +667,8 @@ function initDatabase() {
 /**
  * Save (or overwrite) today's LP snapshot for a given queue.
  */
-function saveLpSnapshot(queue, tier, rank, lp) {
-  return recordLpReading(queue, tier, rank, lp);
+function saveLpSnapshot(queue, tier, rank, lp, { puuid = null } = {}) {
+  return recordLpReading(queue, tier, rank, lp, { puuid });
 }
 
 /**
@@ -597,12 +683,15 @@ function saveLpSnapshot(queue, tier, rank, lp) {
  * Resolves to { changed, delta, previous } so the caller can react to a real
  * LP movement (refresh the chart, attribute it to a match) without re-querying.
  */
-function recordLpReading(queue, tier, rank, lp, { wins = null, losses = null } = {}) {
+async function recordLpReading(queue, tier, rank, lp, { wins = null, losses = null, puuid = null } = {}) {
+  // The previous reading is this account's (#73)
+  const scope = await scopeFor('lp_history');
+  const tag = puuid && hasPuuidColumn.lp_history ? puuid : null;
   return new Promise((resolve, reject) => {
     db.get(
       `SELECT id, tier, rank, lp, recorded_at, wins, losses FROM lp_history
-       WHERE queue = ? ORDER BY recorded_at DESC LIMIT 1`,
-      [queue],
+       WHERE queue = ? AND ${scope.sql} ORDER BY recorded_at DESC LIMIT 1`,
+      [queue, ...scope.params],
       (err, prev) => {
         if (err) return reject(err);
 
@@ -616,9 +705,12 @@ function recordLpReading(queue, tier, rank, lp, { wins = null, losses = null } =
         const now   = Date.now();
         const today = new Date().toISOString().slice(0, 10);
         db.run(
-          `INSERT INTO lp_history (queue, tier, rank, lp, recorded_date, recorded_at, wins, losses)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [queue, tier, rank, lp, today, now, wins, losses],
+          tag
+            ? `INSERT INTO lp_history (queue, tier, rank, lp, recorded_date, recorded_at, wins, losses, puuid)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            : `INSERT INTO lp_history (queue, tier, rank, lp, recorded_date, recorded_at, wins, losses)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          tag ? [queue, tier, rank, lp, today, now, wins, losses, tag] : [queue, tier, rank, lp, today, now, wins, losses],
           function (insErr) {
             if (insErr) return reject(insErr);
             const delta = prev
@@ -637,17 +729,20 @@ function recordLpReading(queue, tier, rank, lp, { wins = null, losses = null } =
  * Keeps the LP progression chart on one point per day now that the table can
  * hold several.
  */
-function getLpHistory(queue) {
+async function getLpHistory(queue) {
+  const outer = await scopeFor('lp_history', 'lp_history.puuid');
+  const inner = await scopeFor('lp_history', 'inner.puuid');
   return new Promise((resolve, reject) => {
     db.all(
       `SELECT recorded_date, tier, rank, lp FROM lp_history
-       WHERE queue = ? AND recorded_at = (
+       WHERE queue = ? AND ${outer.sql} AND recorded_at = (
          SELECT MAX(inner.recorded_at) FROM lp_history AS inner
          WHERE inner.queue = lp_history.queue
            AND inner.recorded_date = lp_history.recorded_date
+           AND ${inner.sql}
        )
        ORDER BY recorded_date ASC`,
-      [queue],
+      [queue, ...outer.params, ...inner.params],
       (err, rows) => { if (err) reject(err); else resolve(rows || []); }
     );
   });
@@ -657,12 +752,13 @@ function getLpHistory(queue) {
  * Every individual reading for a queue, oldest first — the fine-grained series
  * behind per-match LP.
  */
-function getLpReadings(queue) {
+async function getLpReadings(queue) {
+  const scope = await scopeFor('lp_history');
   return new Promise((resolve, reject) => {
     db.all(
       `SELECT id, recorded_date, recorded_at, tier, rank, lp, matchId
-       FROM lp_history WHERE queue = ? ORDER BY recorded_at ASC`,
-      [queue],
+       FROM lp_history WHERE queue = ? AND ${scope.sql} ORDER BY recorded_at ASC`,
+      [queue, ...scope.params],
       (err, rows) => { if (err) reject(err); else resolve(rows || []); }
     );
   });
@@ -680,22 +776,25 @@ async function attachLpReadingsToMatches() {
   const QUEUE_IDS = { solo: 420, flex: 440 };
   let linked = 0;
   let considered = 0;
+  // One account's readings against that account's games (#73)
+  const readingScope = await scopeFor('lp_history');
+  const gameScope = await scopeFor('matches');
 
   for (const [queue, queueId] of Object.entries(QUEUE_IDS)) {
     const readings = await dbAllAsync(
       `SELECT id, recorded_at, wins, losses, matchId FROM lp_history
-       WHERE queue = ? AND recorded_at IS NOT NULL
+       WHERE queue = ? AND recorded_at IS NOT NULL AND ${readingScope.sql}
        ORDER BY recorded_at ASC, id ASC`,
-      [queue]
+      [queue, ...readingScope.params]
     );
     // A remake doesn't count toward W/L, so it can't be what moved the LP.
     // 300 s = REMAKE_MAX_SECONDS in matchService.js (not required here: circular)
     const games = await dbAllAsync(
       `SELECT matchId, gameCreation + gameDuration * 1000 AS endAt FROM matches
-       WHERE queueId = ?
+       WHERE queueId = ? AND ${gameScope.sql}
          AND COALESCE(isRemake, CASE WHEN gameDuration < 300 THEN 1 ELSE 0 END) = 0
        ORDER BY endAt ASC`,
-      [queueId]
+      [queueId, ...gameScope.params]
     );
 
     const links = attributeReadings(readings, games);
@@ -741,10 +840,16 @@ async function addLpCheckpoint(queue, tier, rank, lp, date) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || Number.isNaN(Date.parse(date))) throw new Error('date must be YYYY-MM-DD');
 
   const at = new Date(date + 'T12:00:00Z').getTime();
+  // The configured account's checkpoint (#73); untagged until it's known
+  const scope = await scopeFor('lp_history');
+  const owner = scope.params[0] || null;
   const id = await new Promise((resolve, reject) => db.run(
-    `INSERT INTO lp_history (queue, tier, rank, lp, recorded_date, recorded_at, manual)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`,
-    [queue, T, apex ? 'I' : rank, n, date, at],
+    owner
+      ? `INSERT INTO lp_history (queue, tier, rank, lp, recorded_date, recorded_at, manual, puuid)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+      : `INSERT INTO lp_history (queue, tier, rank, lp, recorded_date, recorded_at, manual)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    owner ? [queue, T, apex ? 'I' : rank, n, date, at, owner] : [queue, T, apex ? 'I' : rank, n, date, at],
     function (err) { if (err) reject(err); else resolve(this.lastID); }
   ));
   await attachLpReadingsToMatches();
@@ -762,10 +867,12 @@ async function deleteLpCheckpoint(id) {
 }
 
 /** Every checkpoint, by queue then date. */
-function getLpCheckpoints() {
+async function getLpCheckpoints() {
+  const scope = await scopeFor('lp_history');
   return dbAllAsync(
     `SELECT id, queue, recorded_date, tier, rank, lp FROM lp_history
-     WHERE manual = 1 ORDER BY queue ASC, recorded_at ASC`
+     WHERE manual = 1 AND ${scope.sql} ORDER BY queue ASC, recorded_at ASC`,
+    scope.params
   );
 }
 
@@ -774,5 +881,6 @@ module.exports = {
   saveLpSnapshot, getLpHistory,
   recordLpReading, getLpReadings, attachLpReadingsToMatches,
   getLpDeltasByMatch, absoluteLp,
-  migrateLpCheckpoints, migrateUnsupportedQueues, addLpCheckpoint, deleteLpCheckpoint, getLpCheckpoints
+  migrateLpCheckpoints, migrateUnsupportedQueues, migrateAccountTags,
+  scopeFor, retagAccount, addLpCheckpoint, deleteLpCheckpoint, getLpCheckpoints
 };

@@ -15,6 +15,8 @@ const {
 } = window.require('./components/tableRenderer');
 const { loadGameData, getDDragonBase } = window.require('./services/dataDragon');
 const { loadConfig, updateConfig, isConfigValid, userDataPath } = window.require('./services/config');
+const { accountKey, isResolved, resolveAccount } = window.require('./services/account');
+const { retagAccount } = window.require('./services/database');
 
 // ============================================================
 // IMPORTS — UI component modules (self-register window.* as side-effects)
@@ -242,6 +244,19 @@ window.saveSetup = function () {
         return;
     }
 
+    // Another account (#73): its games are kept apart, so say what happens to
+    // the ones stored now. A rename of the same account keeps them (same PUUID).
+    const before = loadConfig();
+    const stored = (window.matchesData || []).length;
+    if (stored > 0 && accountKey(before) && accountKey(before) !== accountKey({ gameName, tagLine, platform })) {
+        const ok = window.confirm(
+            `Switch to ${gameName}#${tagLine}?\n\n` +
+            `The ${stored} games stored for ${before.gameName}#${before.tagLine} stay on this PC, but only that ` +
+            `account's games are shown. Switch back in Settings to see them again.\n\n` +
+            `If this is the same account under a new name, its games stay.`);
+        if (!ok) return;
+    }
+
     // Merge, don't replace: config.json also holds the skin, custom background
     // and coaching state, which this dialog doesn't show. Replacing the whole
     // object used to silently wipe them on every Settings save.
@@ -300,27 +315,29 @@ function displayRankedStats(allMatches) {
 // ============================================================
 // RANK DATA — fetch from Riot API and update rank cards
 // ============================================================
-// PUUID never changes for a given Riot ID, so resolving it once saves the
-// watcher an API call on every poll.
-let cachedPuuid = null;
-let cachedPuuidFor = '';
+// The configured account's PUUID (#73). Sync, ranks and LP use only this
+// one; the top bar shows it and can't point them at anyone else. Resolved
+// once per Riot ID per run, which also saves the watcher a call every poll.
+let accountPromise = null;
+let accountPromiseFor = '';
+let accountChanged = false;       // what the app shows changed: reload once
 
-async function resolvePuuid(name, tag) {
-    const key = `${name}#${tag}`.toLowerCase();
-    if (cachedPuuid && cachedPuuidFor === key) return cachedPuuid;
-    cachedPuuid    = await getPuuidByRiotId(name, tag);
-    cachedPuuidFor = key;
-    return cachedPuuid;
+function currentAccountPuuid() {
+    const key = accountKey(loadConfig());
+    if (!key) return Promise.reject(new Error('No Riot ID configured: open Settings and add yours.'));
+    if (accountPromise && accountPromiseFor === key) return accountPromise;
+    accountPromiseFor = key;
+    accountPromise = resolveAccount({ loadConfig, updateConfig, getPuuid: getPuuidByRiotId, retag: retagAccount })
+        .then(r => { if (r.changed) accountChanged = true; return r.puuid; })
+        .catch(err => { accountPromise = null; throw err; });
+    return accountPromise;
 }
+window.currentAccountPuuid = currentAccountPuuid;
 
 window.fetchAndDisplayRankData = async function () {
     try {
-        const config = loadConfig();
-        const name   = document.getElementById('gameName').value.trim() || config.gameName;
-        const tag    = document.getElementById('tagLine').value.trim()  || config.tagLine;
-        if (!name || !tag) return;
-
-        const puuid      = await resolvePuuid(name, tag);
+        if (!accountKey(loadConfig())) return;
+        const puuid      = await currentAccountPuuid();
         const leagueData = await getLeagueData(puuid);
 
         if (leagueData.solo) {
@@ -332,7 +349,7 @@ window.fetchAndDisplayRankData = async function () {
             document.getElementById('soloWinRate').textContent  = soloWr + '%';
             document.getElementById('soloRankIcon').src         = `assets/ranks/emblem-${solo.tier.toLowerCase()}.png`;
             document.getElementById('rankedSoloCard').classList.remove('no-data');
-            saveLpSnapshot('solo', solo.tier, solo.rank, solo.leaguePoints).catch(e => console.warn('LP save failed:', e));
+            saveLpSnapshot('solo', solo.tier, solo.rank, solo.leaguePoints, { puuid }).catch(e => console.warn('LP save failed:', e));
         } else {
             document.getElementById('rankedSoloCard').classList.add('no-data');
         }
@@ -346,7 +363,7 @@ window.fetchAndDisplayRankData = async function () {
             document.getElementById('flexWinRate').textContent  = flexWr + '%';
             document.getElementById('flexRankIcon').src         = `assets/ranks/emblem-${flex.tier.toLowerCase()}.png`;
             document.getElementById('rankedFlexCard').classList.remove('no-data');
-            saveLpSnapshot('flex', flex.tier, flex.rank, flex.leaguePoints).catch(e => console.warn('LP save failed:', e));
+            saveLpSnapshot('flex', flex.tier, flex.rank, flex.leaguePoints, { puuid }).catch(e => console.warn('LP save failed:', e));
         } else {
             document.getElementById('rankedFlexCard').classList.add('no-data');
         }
@@ -395,19 +412,15 @@ let pendingEndTimer = null;
  * Returns true when at least one queue changed.
  */
 async function captureLpReadings({ quiet = false } = {}) {
-    const config = loadConfig();
-    const name = (document.getElementById('gameName').value.trim() || config.gameName || '').trim();
-    const tag  = (document.getElementById('tagLine').value.trim()  || config.tagLine  || '').trim();
-    if (!name || !tag) return false;
-
-    const puuid      = await resolvePuuid(name, tag);
+    if (!accountKey(loadConfig())) return false;
+    const puuid      = await currentAccountPuuid();
     const leagueData = await getLeagueData(puuid);
 
     let moved = false;
     for (const [queue, entry] of [['solo', leagueData.solo], ['flex', leagueData.flex]]) {
         if (!entry) continue;
         const res = await recordLpReading(queue, entry.tier, entry.rank, entry.leaguePoints,
-                                          { wins: entry.wins, losses: entry.losses });
+                                          { wins: entry.wins, losses: entry.losses, puuid });
         if (!res.changed) continue;
         moved = true;
         if (!quiet) {
@@ -782,6 +795,13 @@ window.renderFilteredMatches = async function (opts = {}) {
 // ============================================================
 window.loadMatchHistory = async function (skipRankFetch = false) {
     try {
+        // A Riot ID not resolved yet (just changed in Settings, or a database
+        // from before #73) decides which games to load, so resolve it first.
+        if (accountKey(loadConfig()) && !isResolved(loadConfig())) {
+            await currentAccountPuuid().catch(e => console.warn('Could not resolve the account:', e.message));
+        }
+        accountChanged = false;
+
         // Rows may have been rewritten by a sync/backfill — drop stale blobs
         // and force the next render to recompute every derived view.
         clearJsonCache();
@@ -811,12 +831,13 @@ window.loadMatchHistory = async function (skipRankFetch = false) {
         if (activeQueueFilters.size === 0) initializeFilters();
 
         const config = loadConfig();
-        if (!document.getElementById('gameName').value && config.gameName) {
-            document.getElementById('gameName').value = config.gameName;
-            document.getElementById('tagLine').value  = config.tagLine;
-        }
+        // The top bar shows the configured account (read-only, #73)
+        document.getElementById('gameName').value = config.gameName || '';
+        document.getElementById('tagLine').value  = config.tagLine  || '';
 
         if (!skipRankFetch) await window.fetchAndDisplayRankData();
+        // The rank fetch found the account's PUUID changed: load again with it
+        if (accountChanged) { accountChanged = false; return window.loadMatchHistory(true); }
 
         if (matches.length > 0) {
             document.getElementById('unifiedStatsSection').style.display = 'block';
@@ -827,6 +848,17 @@ window.loadMatchHistory = async function (skipRankFetch = false) {
             await window.renderFilteredMatches();
             showToast('Welcome Back', `${stats.totalMatches} matches loaded`);
         } else {
+            // Nothing stored for this account (yet): clear what the previous
+            // account's games left behind on every page (#73)
+            document.getElementById('unifiedStatsSection').style.display = 'none';
+            document.getElementById('matchHistory').style.display        = 'none';
+            const filterSection = document.getElementById('filterSection');
+            if (filterSection) filterSection.style.display = 'none';
+            window.currentFilteredMatches = [];
+            window.currentPreviousMatches = [];
+            window.championPoolMatches    = [];
+            window.rolePoolMatches        = [];
+            window.exportableMatches      = [];
             showToast('Welcome', `Ready to sync matches for ${config.gameName || 'your account'}`);
         }
     } catch (err) {

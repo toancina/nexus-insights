@@ -926,7 +926,36 @@ Under the Lane Phase cards: average gold and XP minus your lane opponent's
 - The toast moved to page level too: inside `#analytics-tab` it was hidden on
   every other page.
 
-### Left nav rail — 2026-10
+### Accounts (#73) — 2026-10
+
+Sync used whatever Riot ID was typed in the top bar, and nothing recorded
+whose games were stored, so another player's games could land in your
+history for good (`scripts/cleanup-matches.js` exists because it happened).
+
+- `matches.puuid` and `lp_history.puuid`: the account a game / reading
+  belongs to. Migration 8 filled them from each game's rawJson (the row's
+  player by champion + team; ~1 s for 1,800 games). LP readings got the
+  PUUID only when all games had one owner. Sync writes it on every game.
+- config `puuid` + `puuidFor` (`name#tag@platform`, lower case): the
+  configured account, resolved by `currentAccountPuuid()` (renderer.js, once
+  per Riot ID per run) through `services/account.js` (pure, tested).
+- `accountScope` / `database.scopeFor(table)`: resolved → that PUUID plus
+  untagged rows; Riot ID changed but not resolved → nothing tagged; never
+  resolved → everything. Applied to getMatches, getStats, getCoachingData,
+  the LP queries, checkpoints and LP attribution, and to sync's
+  forward-start (`MAX(gameCreation)` of this account only, so a new account
+  syncs from season start). `scopeFor` checks the column exists first: the
+  window can query before main has added it.
+- The **PUUID is the key, not the Riot ID**: one real history spans
+  Toan#GGWP and Toan#NBG. Riot encrypts PUUIDs per key project, so when the
+  same Riot ID + server resolves to a new PUUID, `retagAccount` moves the
+  rows instead of hiding them.
+- The top bar's Riot ID is **read-only** (click opens Settings). Sync, ranks
+  and LP capture read the config only. Saving another Riot ID in Settings
+  with games stored asks first; the old account's games stay, hidden.
+- A game both accounts played is stored once (matchId is the key), under
+  whichever synced it first.
+
 
 The sliding drawer is gone. `#navDrawer` carries `nav-rail` and is always
 visible (78px, `--nav-rail-width`; `body` is padded by that). Buttons stack

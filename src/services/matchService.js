@@ -1,5 +1,5 @@
 const { getMatchIds, getMatchData, getMatchTimeline } = require('./riotApi');
-const { db } = require('./database');
+const { db, scopeFor } = require('./database');
 const { compressJson, decompressJson, decompressJsonAsync } = require('./compression');
 const { computeTeamImpact } = require('./teamImpact');
 const { patchOf } = require('./patches');
@@ -128,6 +128,8 @@ function clearJsonCache() {
 // NOTE: rawJson / timelineJson are intentionally excluded — use loadRawJson /
 // loadTimelineJson + the getCached* accessors instead.
 async function getMatches(limit = null) {
+    // Only the configured account's games (#73)
+    const scope = await scopeFor('matches');
     const sql = `SELECT matchId, queueId, gameCreation, gameDuration, championName, champLevel,
                 win, kills, deaths, assists, goldEarned, totalMinionsKilled,
                 totalDamageDealtToChampions, visionScore,
@@ -150,10 +152,10 @@ async function getMatches(limit = null) {
                 turretDamage, objectiveDamage, firstDeathAt, laneGaps,
                 itemPurchases, deathPositions
          FROM matches
-         WHERE queueId IN (${[...ALLOWED_QUEUES].join(',')})
+         WHERE queueId IN (${[...ALLOWED_QUEUES].join(',')}) AND ${scope.sql}
          ORDER BY gameCreation DESC${limit ? ' LIMIT ?' : ''}`;
 
-    return dbAll(sql, limit ? [limit] : []);
+    return dbAll(sql, limit ? [...scope.params, limit] : scope.params);
 }
 
 // Get full match details by ID (including rawJson for team composition)
@@ -182,6 +184,7 @@ async function getCoachingData(seasonStart, timelineSample = 40) {
     // every other statistic: 0/0/0 KDA rows drag every average toward zero
     // and count wins/losses that never happened. COALESCE mirrors
     // window.isRemake's duration fallback for rows that predate the column.
+    const scope = await scopeFor('matches');
     const rows = await dbAll(`
         SELECT matchId, win, championName, kills, deaths, assists,
                gameDuration, gameCreation,
@@ -197,18 +200,18 @@ async function getCoachingData(seasonStart, timelineSample = 40) {
                teamPosition, deathsBefore10, cs10, cs15, soloKillDiff,
                killParticipation, dmgShare
         FROM matches
-        WHERE queueId = 420 AND gameCreation >= ?
+        WHERE queueId = 420 AND gameCreation >= ? AND ${scope.sql}
           AND COALESCE(isRemake, CASE WHEN gameDuration < ${REMAKE_MAX_SECONDS} THEN 1 ELSE 0 END) = 0
         ORDER BY gameCreation ASC
-    `, [seasonStart]);
+    `, [seasonStart, ...scope.params]);
 
     if (!rows || rows.length === 0) return { rows: [], firstDrakeTimes: [] };
 
     const timelineRows = await dbAll(`
         SELECT timelineJson FROM matches
-        WHERE queueId = 420 AND gameCreation >= ? AND timelineJson IS NOT NULL
+        WHERE queueId = 420 AND gameCreation >= ? AND timelineJson IS NOT NULL AND ${scope.sql}
         ORDER BY gameCreation DESC LIMIT ?
-    `, [seasonStart, timelineSample]);
+    `, [seasonStart, ...scope.params, timelineSample]);
 
     // Reduce each timeline to a single number here so the renderer never has
     // to see (or hold in memory) the timeline payloads themselves.
@@ -233,6 +236,7 @@ async function getCoachingData(seasonStart, timelineSample = 40) {
 
 // Get summary stats (remakes excluded — they are not statistics)
 async function getStats() {
+    const scope = await scopeFor('matches');
     const stats = await dbGet(
         `SELECT
             COUNT(*) as totalMatches,
@@ -250,7 +254,9 @@ async function getStats() {
             SUM(turretKills) as totalTurrets,
             AVG(wardsPlaced) as avgWardsPlaced
          FROM matches
-         WHERE COALESCE(isRemake, CASE WHEN gameDuration < ${REMAKE_MAX_SECONDS} THEN 1 ELSE 0 END) = 0`
+         WHERE COALESCE(isRemake, CASE WHEN gameDuration < ${REMAKE_MAX_SECONDS} THEN 1 ELSE 0 END) = 0
+           AND ${scope.sql}`,
+        scope.params
     );
     return stats;
 }
@@ -264,7 +270,10 @@ async function syncMatches(puuid, onProgress) {
     console.log(`Existing matches in DB: ${existingIds.size}`);
 
     // Get the most recent match timestamp
-    const latestMatch = await dbGet("SELECT MAX(gameCreation) as latestTime FROM matches");
+    // This account's newest game: another account's mustn't decide where a
+    // first sync starts (#73). Untagged rows predate tagging and are yours.
+    const latestMatch = await dbGet(
+        "SELECT MAX(gameCreation) as latestTime FROM matches WHERE puuid = ? OR puuid IS NULL", [puuid]);
 
     let allMatchIds = [];
 
@@ -408,8 +417,9 @@ async function storeGames(puuid, matchIds, onProgress, skipped = 0) {
                         teamInhibitors, enemyInhibitors, teamId, teamKills,
                         primaryRune, secondaryRuneStyle,
                         rawJson, timelineJson,
-                        csDiff15, goldDiff15, xpDiff15, firstBlood, dmgGoldRatio, isolatedDeaths, objectiveRate
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        csDiff15, goldDiff15, xpDiff15, firstBlood, dmgGoldRatio, isolatedDeaths, objectiveRate,
+                        puuid
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         id, info.queueId, info.gameCreation, info.gameDuration, me.championName, me.champLevel,
                         me.win ? 1 : 0, me.kills, me.deaths, me.assists, me.goldEarned, (me.totalMinionsKilled || 0) + (me.neutralMinionsKilled || 0),
@@ -424,7 +434,8 @@ async function storeGames(puuid, matchIds, onProgress, skipped = 0) {
                         teamInhibitors, enemyInhibitors, me.teamId, teamKills,
                         primaryRune, secondaryRuneStyle,
                         compressJson(data), timelineData ? compressJson(timelineData) : null,
-                        advStats.csDiff15, advStats.goldDiff15, advStats.xpDiff15, advStats.firstBlood, advStats.dmgGoldRatio, advStats.isolatedDeaths, advStats.objectiveRate
+                        advStats.csDiff15, advStats.goldDiff15, advStats.xpDiff15, advStats.firstBlood, advStats.dmgGoldRatio, advStats.isolatedDeaths, advStats.objectiveRate,
+                        puuid   // whose game this is (#73)
                     ]
                 );
                 // Write the precomputed analytics values through the same
