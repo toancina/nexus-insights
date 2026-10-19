@@ -145,7 +145,7 @@ function renderEmptyState(problem) {
             <div class="chat-empty-icon">💬</div>
             <h3>Ask about your games</h3>
             <p>${games
-                ? `The assistant can look up all ${games.toLocaleString()} of your stored games — by queue, champion, role or date.`
+                ? `The assistant can look up all ${games.toLocaleString('en-US')} of your stored games — by queue, champion, role or date.`
                 : 'Sync your matches first, then ask away.'}</p>
             ${problem
                 ? `<div class="chat-problem">${escapeHtml(problem)}

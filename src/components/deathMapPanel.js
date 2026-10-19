@@ -12,7 +12,7 @@
  */
 
 const D = require('../services/deathMap');
-const { escapeHtml } = require('./dom');
+const { escapeHtml, formatInt } = require('./dom');
 
 const PHASE_WORDS = { early: 'early game', mid: 'mid game', late: 'late game' };
 const pct = v => `${Math.round(v * 100)}%`;
@@ -101,7 +101,7 @@ function renderDeathMap(matches) {
         ${shift.to > shift.from ? 'up' : 'down'} from ${pct(shift.from)} in the ${PHASE_WORDS[keyOf(shift.fromPhase)]}.` : '';
 
     host.innerHTML = `
-        ${head}<span class="dm-sub">${lastDeaths.length} deaths in ${withData.length} games · red-side games are turned so you always start bottom-left</span></div>
+        ${head}<span class="dm-sub">${formatInt(lastDeaths.length)} deaths in ${formatInt(withData.length)} games · red-side games are turned so you always start bottom-left</span></div>
         <div class="dm-body">
             <div class="dm-map"><canvas class="dm-canvas" aria-label="Map of where you died"></canvas></div>
             <div class="dm-side">

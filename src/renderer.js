@@ -48,6 +48,7 @@ const {
     renderRunes, renderSummonerSpells, formatDamage, getChampionIcon
 } = window.require('./components/matchCard');
 const { initTooltips }              = window.require('./components/tooltipSystem');
+const { formatInt }                 = window.require('./components/dom');
 const {
     activeQueueFilters, initializeFilters, updateChampionDropdown, updateRoleDropdown
 } = window.require('./components/filtersPanel');
@@ -786,7 +787,7 @@ window.renderFilteredMatches = async function (opts = {}) {
         if (navCount) navCount.textContent = filteredMatches.length;
 
         const badge = document.getElementById('matchCountBadge');
-        badge.textContent = `${filteredMatches.length} ${filteredMatches.length === 1 ? 'match' : 'matches'}`
+        badge.textContent = `${formatInt(filteredMatches.length)} ${filteredMatches.length === 1 ? 'match' : 'matches'}`
             + (remakeCount > 0 ? ` · ${remakeCount} remake${remakeCount === 1 ? '' : 's'} excluded from stats` : '');
         badge.title = remakeCount > 0
             ? 'Remakes are shown in the list below but left out of every statistic'
@@ -831,7 +832,7 @@ window.renderFilteredMatches = async function (opts = {}) {
     if (loadMoreBar) {
         if (remaining > 0) {
             loadMoreBar.style.display = 'flex';
-            if (loadMoreInfo) loadMoreInfo.textContent = `Showing ${pagedMatches.length} of ${filteredMatches.length} matches`;
+            if (loadMoreInfo) loadMoreInfo.textContent = `Showing ${formatInt(pagedMatches.length)} of ${formatInt(filteredMatches.length)} matches`;
         } else {
             loadMoreBar.style.display = 'none';
         }

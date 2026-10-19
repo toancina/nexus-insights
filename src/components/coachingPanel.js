@@ -27,7 +27,7 @@
     const Progress = require('./coachingProgress');
     const Board    = require('./coachingBoard');
     const { ROLE_NAMES } = require('./roleRanks');
-    const { escapeHtml } = require('./dom');
+    const { escapeHtml, formatInt } = require('./dom');
 
     const fmt = (v, dp = 1) => (v === null || v === undefined || Number.isNaN(v))
         ? '—' : Number(v).toFixed(dp);
@@ -114,7 +114,7 @@
             <div class="coach-rank-title">${rankLine}</div>
             <div class="coach-rank-sub">Last ${h.games} games:
               <b class="good">${h.wins}W</b> <b class="bad">${h.losses}L</b>${lp ? ' · ' + lp : ''}
-              <span class="coach-dim">· ${games.length} games this season</span></div>
+              <span class="coach-dim">· ${formatInt(games.length)} games this season</span></div>
           </div>
           <button class="coach-btn" onclick="window.renderCoachingPanel()">Refresh</button>
         </div>`;

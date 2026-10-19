@@ -193,7 +193,7 @@ const ratio = (numerator, denominator, fallback = 0) => {
     return d !== 0 && Number.isFinite(n / d) ? n / d : fallback;
 };
 const formatPct = (num) => `${Math.round(num * 100)}%`;
-const formatNum = (num, decimals = 1) => Number(num).toFixed(decimals);
+const formatNum = (num, decimals = 1) => Number(num).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 const fmtInt = (v) => Math.round(v).toLocaleString('en-US');
 const fmtDiff = (v) => (v > 0 ? '+' : '') + Math.round(v).toLocaleString('en-US');
 // Minutes → "7:42"
