@@ -1122,6 +1122,7 @@ body.modal-open .page-scroll { overflow: hidden; }
 .rb-title,
 .ch-card-title,
 .live-team h3,
+.live-next-title,
 .coach-section-label {
     font-size: var(--t-label);
     font-weight: 700;

@@ -83,6 +83,23 @@ test('parsePlayers uses a puuid when the Live Client gives one', () => {
     assert.equal(parsePlayers(list, null, CHAMPS)[0].puuid, 'pu-1');
 });
 
+test('parsePlayers lists the items each player holds, in slot order (#90)', () => {
+    /** One `items` entry as the playerlist returns it. */
+    const item = (itemID, slot, displayName) => ({
+        canUse: false, consumable: false, count: 1, displayName, itemID, price: 0,
+        rawDescription: `GeneratedTip_Item_${itemID}_Description`, rawDisplayName: `Item_${itemID}_Name`, slot,
+    });
+    const list = [
+        livePlayer('A', 'EUW', 'ORDER', 'TOP', 'Aatrox', {
+            items: [item(3006, 2, "Berserker's Greaves"), item(3071, 0, 'Black Cleaver'), item(3340, 6, 'Stealth Ward')],
+        }),
+        livePlayer('B', 'EUW', 'ORDER', 'MIDDLE', 'Ahri'),   // no items array (loading screen)
+    ];
+    const [a, b] = parsePlayers(list, null, CHAMPS);
+    assert.deepEqual(a.items, [3071, 3006, 3340]);
+    assert.deepEqual(b.items, []);
+});
+
 test('parsePlayers sorts by position only when positions exist', () => {
     const list = [
         livePlayer('C', 'EUW', 'ORDER', '', 'Zed'),

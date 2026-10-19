@@ -85,6 +85,8 @@ function parsePlayers(playerList, activeName, champions) {
                 spellId(p.summonerSpells?.summonerSpellTwo?.rawDisplayName),
             ],
             keystoneId: p.runes?.keystone?.id ?? null,
+            items: (p.items || []).filter(i => i && i.itemID > 0)
+                .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0)).map(i => i.itemID),   // #90
             isBot,
             isYou,
             lookup: !isBot && !!gameName && !!tagLine,

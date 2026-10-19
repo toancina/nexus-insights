@@ -7,22 +7,32 @@
  * then services/liveGameLoader fills in rank, mastery and recent Solo/Duo
  * games from the Riot API, row by row. Clicking again starts over; the
  * loader's caches make that nearly free for the same game.
+ *
+ * Your own row also shows the items you hold and a Next item card (#90):
+ * what you bought next in your stored games on this champion when you had
+ * the same finished items, ranked by average WPA (services/nextItem.js).
+ * Your items are re-read every ITEM_POLL_MS while the game runs.
  */
 
 const { getPlayerList, getActivePlayerName } = require('../services/liveClient');
-const { getChampionList } = require('../services/dataDragon');
+const { getChampionList, getItemData } = require('../services/dataDragon');
 const riotApi = require('../services/riotApi');
 const liveGameStore = require('../services/liveGameStore');
 const { createLiveGameLoader } = require('../services/liveGameLoader');
 const { parsePlayers, playerTags, rankSummary, gamesTogether } = require('../services/liveGame');
 const { loadTeammates } = require('../services/matchService');
 const { loadConfig } = require('../services/config');
+const { nextItemOptions, championGames, MIN_GAMES } = require('../services/nextItem');
+const { formatWpa } = require('../services/itemWpa');
 const { getChampionIcon, timeAgo, RUNE_ICONS } = require('./matchCard');
+const { itemImg } = require('./itemIcon');
+const { isBuildItem } = require('./itemKinds');
 const { tierColor } = require('./rankTiers');
 const { wrTextColor } = require('./winRateColor');
 const { escapeHtml, escapeAttr } = require('./dom');
 
 const loader = createLiveGameLoader({ api: riotApi, store: liveGameStore });
+const ITEM_POLL_MS = 10 * 1000;   // local call, costs nothing
 
 const NO_GAME = 'No game found. Start a game, then click Detect live game. ' +
                 'On the loading screen, wait until the game has started.';
@@ -32,10 +42,12 @@ const GOOD_TAGS = /^(Main|Win streak|Hot streak|Veteran)/;
 const BAD_TAGS = /^(First time|Loss streak|Inactive)/;
 
 let generation = 0;   // bumped by every click; an older load sees it and stops
-let state = null;     // { players, entries, together }
+let state = null;     // { players, entries, together, allyTeam, activeName, ownGames, next }
+let itemTimer = null;
 
 const pct = (x) => `${Math.round(x * 100)}%`;
 const titleCase = (s) => String(s || '').charAt(0) + String(s || '').slice(1).toLowerCase();
+const itemName = (id) => (getItemData(id) || {}).name || `Item ${id}`;
 
 function setStatus(text, isError = false) {
     const el = document.getElementById('liveStatus');
@@ -74,6 +86,63 @@ function formHtml(p, f) {
         <div class="live-line live-muted">${escapeHtml(p.championName)} ${champ}</div>`;
 }
 
+/** Next item card rows: the top 3, WPA "–" until MIN_GAMES of an item's games have a curve. */
+function nextItemRows(options) {
+    return options.slice(0, 3).map(o => {
+        const noWpa = o.wpaGames < MIN_GAMES;
+        const color = noWpa || Math.abs(o.wpa) < 0.05 ? '' : o.wpa > 0 ? 'var(--success)' : 'var(--error)';
+        const wpaTitle = noWpa ? '' : ` · WPA ${formatWpa(o.wpa)} over ${o.wpaGames} games`;
+        return `<div class="live-next-row${o.games < MIN_GAMES ? ' is-low' : ''}" title="${escapeAttr(itemName(o.itemId))}: ${o.wins}W ${o.games - o.wins}L${wpaTitle}">
+            ${itemImg(o.itemId, { extra: 'class="live-item"' })}
+            <span class="live-next-name">${escapeHtml(itemName(o.itemId))}</span>
+            <span class="live-next-num">${o.games}</span>
+            <span class="live-next-num" style="color:${wrTextColor(o.winRate)}">${pct(o.winRate)}</span>
+            <span class="live-next-num"${color ? ` style="color:${color}"` : ''}>${noWpa ? '–' : formatWpa(o.wpa)}</span>
+        </div>`;
+    }).join('');
+}
+
+/** What the card's numbers are based on: role, and which of your items matched. */
+function nextItemBasis(p, r, role) {
+    const champ = escapeHtml(p.championName);
+    const roleText = role ? ` as ${POSITION_LABEL[role] || escapeHtml(role)}` : '';
+    const games = `${r.games} ${champ} game${r.games === 1 ? '' : 's'}${roleText}`;
+    const owned = [...new Set(p.items.filter(isBuildItem))];
+    const names = r.basis.map(id => escapeHtml(itemName(id))).join(' + ');
+    if (!owned.length) return `From your ${games}: your first finished item`;
+    if (r.basis.length === owned.length) return `From your ${games} with ${names}`;
+    if (r.basis.length) return `From your ${games} with ${names} (too few had all your items)`;
+    return `From your ${games} (too few had your items)`;
+}
+
+function nextItemCard(p) {
+    const title = '<div class="live-next-title">Next item</div>';
+    if (!state.ownGames) {
+        return `${title}<div class="live-line live-muted">Uses your stored games, and they belong to the account in Settings, not this one.</div>`;
+    }
+    const { role, games } = championGames(state.ownGames, p.championId, p.position);
+    if (!games.length) {
+        return `${title}<div class="live-line live-muted">No ${escapeHtml(p.championName)} games with purchase data stored yet.</div>`;
+    }
+    const r = nextItemOptions(games, p.items, { isCompleted: isBuildItem });
+    if (!r.options.some(o => o.games >= MIN_GAMES)) {
+        return `${title}<div class="live-line live-muted">Not enough ${escapeHtml(p.championName)} games yet: no item was bought next in ${MIN_GAMES} of them.</div>`;
+    }
+    return `${title}
+        <div class="live-next-sub">${nextItemBasis(p, r, role)}</div>
+        <div class="live-next-row live-next-head"><span></span><span>Item</span>
+            <span class="live-next-num">Games</span><span class="live-next-num">Win rate</span><span class="live-next-num">WPA</span></div>
+        ${nextItemRows(r.options)}
+        <div class="live-next-note">WPA: the average change in your team's estimated win chance from that purchase until your next trip to the shop. It shows how your games went, not what the item caused. Boots are left out.</div>`;
+}
+
+/** The card for your row, recomputed only when the champion, role or items change. */
+function nextItemHtml(p) {
+    const key = `${p.championId}|${p.position}|${p.items.join(',')}`;
+    if (!state.next || state.next.key !== key) state.next = { key, html: nextItemCard(p) };
+    return `<div class="live-next">${state.next.html}</div>`;
+}
+
 function rowHtml(p) {
     const entry = state.entries[p.index];
     const icon = p.championId ? getChampionIcon(p.championId) : '';
@@ -110,14 +179,20 @@ function rowHtml(p) {
             .map(t => `<span class="live-tag${GOOD_TAGS.test(t) ? ' good' : BAD_TAGS.test(t) ? ' bad' : ''}">${escapeHtml(t)}</span>`).join('')
         : '';
 
+    const items = p.isYou && p.items.length
+        ? `<div class="live-items">${p.items.map(id => itemImg(id, { extra: 'class="live-item"' })).join('')}</div>`
+        : '';
+
     return `<div class="live-row${p.isYou ? ' you' : ''}" id="liveRow${p.index}">
         ${icon ? `<img class="live-champ" src="${escapeAttr(icon)}" alt="${escapeAttr(p.championName)}" title="${escapeAttr(p.championName)}">` : '<div class="live-champ"></div>'}
         <div class="live-who">
             <div class="live-name">${escapeHtml(p.gameName)}${tag}${you}</div>
             <div class="live-sub">${position ? `<span>${position}</span>` : ''}${spells}${keystone}</div>
+            ${items}
             ${tags ? `<div class="live-tags">${tags}</div>` : ''}
         </div>
         ${stats}
+        ${p.isYou ? nextItemHtml(p) : ''}
     </div>`;
 }
 
@@ -162,8 +237,31 @@ function isConfiguredAccount(you) {
     return !!you && !!gameName && you.riotId.toLowerCase() === `${gameName}#${tagLine || ''}`.toLowerCase();
 }
 
+function stopItemPoll() {
+    if (itemTimer) clearInterval(itemTimer);
+    itemTimer = null;
+}
+
+/** Re-read your items while the game runs, so the Next item card follows your purchases. */
+function startItemPoll(gen) {
+    stopItemPoll();
+    itemTimer = setInterval(async () => {
+        if (gen !== generation || !state) { stopItemPoll(); return; }
+        const list = await getPlayerList();
+        if (gen !== generation || !state) return;
+        if (!list) { stopItemPoll(); return; }   // the game is over; keep the page as it was
+        const now = parsePlayers(list, state.activeName, getChampionList()).find(p => p.isYou);
+        const you = state.players.find(p => p.isYou);
+        if (now && you && now.items.join(',') !== you.items.join(',')) {
+            you.items = now.items;
+            renderRow(you.index);
+        }
+    }, ITEM_POLL_MS);
+}
+
 async function detect() {
     const gen = ++generation;
+    stopItemPoll();
     const btn = document.getElementById('liveDetectBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
     setStatus('');
@@ -180,8 +278,15 @@ async function detect() {
         }
         players = parsePlayers(list, active, getChampionList());
         const you = players.find(p => p.isYou);
-        state = { players, entries: players.map(() => null), together: null, allyTeam: you ? you.team : null };
+        const ownGames = isConfiguredAccount(you) ? (window.matchesData || []) : null;
+        state = {
+            players, entries: players.map(() => null), together: null, allyTeam: you ? you.team : null,
+            activeName: active,
+            ownGames: ownGames && typeof window.excludeRemakes === 'function' ? window.excludeRemakes(ownGames) : ownGames,
+            next: null,
+        };
         render();
+        if (you) startItemPoll(gen);
         setStatus('Looking up players…');
     } finally {
         if (btn && gen === generation) { btn.disabled = false; btn.textContent = 'Detect live game'; }

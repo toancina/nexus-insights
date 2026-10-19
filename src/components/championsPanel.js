@@ -12,6 +12,7 @@
 
 const { championTable, championDetail, sortRows, roleLabel } = require('../services/championStats');
 const { itemImg } = require('./itemIcon');
+const { isCoreItem, isExcludedItem, isBuildItem } = require('./itemKinds');
 const { getItemData, getRuneData } = require('../services/dataDragon');
 const { getChampionIcon, RUNE_ICONS } = require('./matchCard');
 const { escapeHtml, formatInt } = require('./dom');
@@ -69,21 +70,6 @@ function runeIcon(id, cls = 'ch-rune') {
 const runeName = id => (getRuneData(id) || {}).name || `Rune ${id}`;
 const itemName = id => (getItemData(id) || {}).name || `Item ${id}`;
 
-/**
- * Finished items only: no consumables, trinkets or components. Boots count
- * once they're past basic Boots, even though tier-2 boots can still upgrade.
- * Without Data Dragon loaded, everything counts.
- */
-function isCoreItem(id) {
-    const it = getItemData(id);
-    if (!it) return true;
-    const tags = it.tags || [];
-    const cost = (it.gold && it.gold.total) || 0;
-    if (tags.includes('Consumable') || tags.includes('Trinket')) return false;
-    if (tags.includes('Boots')) return cost >= 900;
-    return !(it.into && it.into.length) && cost >= 1000;
-}
-
 // ---------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------
@@ -137,21 +123,6 @@ function rateTable(title, rows, cellsOf, empty) {
                 <tbody>${body}</tbody>
             </table>
         </div>`;
-}
-
-/** Trinkets and consumables never count as part of a build. */
-function isExcludedItem(id) {
-    const tags = (getItemData(id) || {}).tags || [];
-    return tags.includes('Consumable') || tags.includes('Trinket');
-}
-
-/**
- * The numbered build slots are about the big item choices, so boots (which
- * nearly everyone buys first) stay out of them; they still show under First
- * back and in Core items.
- */
-function isBuildItem(id) {
-    return isCoreItem(id) && !((getItemData(id) || {}).tags || []).includes('Boots');
 }
 
 /**
