@@ -564,9 +564,10 @@
         </section>
     </div>
 
-    <!-- Chat Tab — talk to a local Ollama model about the stored matches.
-         Driven by components/chatPanel.js; the model gets its numbers only
-         from components/chatTools.js. -->
+    <!-- Chat Tab — talk to a model about the stored matches: a local Ollama
+         model, or a cloud one with your own API key (#91). Driven by
+         components/chatPanel.js; the model gets its numbers only from
+         components/chatTools.js. -->
     <div id="chat-tab" class="page-tab page-tab--fill" style="display:none;">
         <section class="page chat-page">
             <header class="page-header">
@@ -576,6 +577,7 @@
                 </div>
                 <div class="page-actions chat-controls">
                     <span class="chat-status" id="chatStatus"><i></i><span>Checking Ollama…</span></span>
+                    <select id="chatProvider" class="chat-model" title="Where the model runs" aria-label="Provider"></select>
                     <select id="chatModel" class="chat-model" title="Model" aria-label="Model"></select>
                     <label class="chat-think" title="Slower, but the model reasons more carefully before answering">
                         <input type="checkbox" id="chatThink"> Think harder
@@ -583,6 +585,8 @@
                     <button class="chat-btn" id="chatNew" type="button">New chat</button>
                 </div>
             </header>
+
+            <div class="chat-keybar" id="chatKeyBar" style="display:none;"></div>
 
             <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
 

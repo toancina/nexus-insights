@@ -1110,7 +1110,8 @@ body.modal-open .page-scroll { overflow: hidden; }
 .coach-col,
 .skin-card,
 .skins-bg,
-.chat-messages {
+.chat-messages,
+.chat-keybar {
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r-card);

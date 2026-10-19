@@ -1,10 +1,13 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, nativeImage, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 
 const { initDatabase } = require('./services/database');
 const { loadConfig, setConfigValue, hasSavedValue, clearConfigCache } = require('./services/config');
 const { createUpdater } = require('./services/updater');
+const { userDataPath } = require('./services/paths');
+const { createSecretStore } = require('./services/secretStore');
+const { createChatBridge, registerChatIpc } = require('./services/chatBridge');
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -421,6 +424,12 @@ ipcMain.handle('csv:save', async (event, { defaultName, content }) => {
   await fs.promises.writeFile(filePath, '﻿' + content, 'utf8');
   return { saved: true, filePath };
 });
+
+// Chat with a cloud model (#91). The API key is encrypted with safeStorage and
+// stays in this process, which makes the calls; the window gets only text.
+registerChatIpc(ipcMain, createChatBridge({
+  store: createSecretStore({ safeStorage, file: path.join(userDataPath, 'secrets.json') }),
+}));
 
 // Second launch (desktop shortcut while the tray copy runs) — surface the
 // existing window instead of starting over.

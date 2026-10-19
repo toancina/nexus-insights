@@ -6007,6 +6007,33 @@ body {
 .chat-foot { font-size: var(--font-xs); color: var(--text-tertiary); text-align: center; }
 .chat-foot-warn { color: #fdba74; }
 
+/* API key bar for cloud providers (#91) */
+.chat-keybar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+    padding: var(--s3) var(--s4);
+    font-size: var(--t-small); color: var(--text-secondary);
+}
+.chat-keybar-text { flex: 1; min-width: 220px; }
+.chat-keybar-text b { color: var(--text-primary); }
+.chat-keyform { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2); flex: 1 1 100%; }
+.chat-keyfield { display: flex; flex-direction: column; gap: 4px; flex: 1 1 220px; }
+.chat-keyfield span { font-size: var(--t-label); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; }
+.chat-input {
+    height: 34px; padding: 0 10px;
+    background: rgba(0,0,0,0.35); color: var(--text-primary);
+    border: 1px solid var(--line-strong); border-radius: var(--r-ctl);
+    font: inherit; font-size: var(--t-small);
+}
+.chat-input:focus { outline: none; border-color: rgba(var(--accent-rgb),0.6); box-shadow: var(--focus-ring); }
+.chat-btn--primary { background: var(--accent-primary); color: var(--on-accent); border-color: transparent; font-weight: 700; }
+.chat-btn--primary:hover { background: var(--accent-primary); border-color: transparent; filter: brightness(1.1); }
+.chat-btn:disabled { opacity: .6; cursor: default; }
+.chat-keybar-note { flex: 1 1 100%; font-size: 11px; color: var(--text-tertiary); }
+.chat-keybar-note a { color: var(--accent-primary); }
+.chat-keybar-warn { color: #fdba74; }
+.chat-keybar-error { flex: 1 1 100%; color: #fca5a5; }
+.chat-keybar-error:empty { display: none; }
+
 /* ==========================================================================
    Update button (titlebar, components/updateButton.js)
    ========================================================================== */

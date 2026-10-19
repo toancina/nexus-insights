@@ -1,16 +1,25 @@
 /**
- * chatPanel.js — the Chat page: talk to a local Ollama model about your games.
+ * chatPanel.js — the Chat page: talk to a model about your games.
  *
- *   chatPanel (this file)  UI: model picker, messages, composer, status
+ *   chatPanel (this file)  UI: provider + model picker, API key bar, messages, composer, status
  *   chatAgent.js           the tool-calling loop
  *   chatTools.js           the data tools (every number comes from here)
- *   services/ollama.js     HTTP client for http://127.0.0.1:11434
+ *   services/ollama.js     HTTP client for a local Ollama (http://127.0.0.1:11434), the default
+ *   chatRemote.js          cloud providers (#91): Mistral or any OpenAI-compatible API, over
+ *                          IPC to services/chatBridge.js, which holds the key and makes the calls
  *   markdown.js            safe rendering of the model's answers
+ *
+ * The API key is typed here once, sent to the main process and encrypted
+ * there (services/secretStore.js). This window never gets it back: only
+ * "saved, ends in a1b2".
  *
  * Exposes window.openChatPanel(), called by switchTopTab('chat').
  */
 
+const { ipcRenderer }   = require('electron');
 const { createClient }  = require('../services/ollama');
+const { createRemoteClient, keyApi } = require('./chatRemote');
+const { PROVIDERS }     = require('../services/chatProviders');
 const { loadConfig }    = require('../services/config');
 const {
     getCoachingData, getLpReadings, absoluteLp,
@@ -24,12 +33,15 @@ const statHistory        = require('./statHistory');
 const CoachingEngine     = require('./coachingEngine');
 
 const PREFERRED_MODEL = 'qwen3:8b';
-const MODEL_KEY       = 'nexus.chatModel';
+const MODEL_KEY       = 'nexus.chatModel';      // Ollama's; cloud providers add ".<provider>"
 const THINK_KEY       = 'nexus.chatThink';
+const PROVIDER_KEY    = 'nexus.chatProvider';
+const PROVIDER_OPTIONS = [['ollama', 'Ollama (this PC)'], ...Object.values(PROVIDERS).map(p => [p.id, p.label])];
 
 // num_ctx: Ollama's default context is small and silently truncates the
 // START of the conversation — i.e. the system prompt and tool rules — once
 // tool results pile up. 8k fits several tool rounds of the compact results.
+// Cloud providers use only the temperature.
 const MODEL_OPTIONS = { num_ctx: 8192, temperature: 0.4 };
 
 const SUGGESTIONS = [
@@ -41,25 +53,47 @@ const SUGGESTIONS = [
     'Compare my Solo/Duo and Flex results',
 ];
 
-const client = createClient();
+const ollama = createClient();
+const remoteClients = {};
+const keys = keyApi(ipcRenderer);
 
 const state = {
     initialised: false,
+    provider: 'ollama',
+    keyStatus: null,    // cloud provider: { saved, last4, persisted, baseUrl }
+    editingKey: false,
     models: [],
     model: null,
-    ollamaUp: false,
+    up: false,          // the provider answered: Ollama running, or the key accepted
     history: [],        // [{ role, content }] — final texts only
     busy: false,
     abort: null,
 };
+let refreshGen = 0;     // the provider can change while a check is running
 
 const $ = id => document.getElementById(id);
 
 function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function storageSet(key, v) { try { localStorage.setItem(key, v); } catch { /* storage unavailable */ } }
 
+const isCloud = () => state.provider !== 'ollama';
+const providerInfo = () => PROVIDERS[state.provider] || null;
+const modelKey = () => (isCloud() ? `${MODEL_KEY}.${state.provider}` : MODEL_KEY);
+
+function client() {
+    if (!isCloud()) return ollama;
+    if (!remoteClients[state.provider]) {
+        remoteClients[state.provider] = createRemoteClient({ provider: state.provider, ipc: ipcRenderer });
+    }
+    return remoteClients[state.provider];
+}
+
+function hostOf(url) {
+    try { return new URL(url).host; } catch { return ''; }
+}
+
 // ---------------------------------------------------------------------------
-// Status + model picker
+// Status, provider + model picker, key bar
 // ---------------------------------------------------------------------------
 
 function setStatus(kind, text) {
@@ -76,34 +110,133 @@ function currentModelInfo() {
 function updateFoot() {
     const foot = $('chatFoot');
     if (!foot) return;
+    if (isCloud()) {
+        const p = providerInfo();
+        const host = hostOf(state.keyStatus && state.keyStatus.baseUrl) || p.label;
+        foot.innerHTML = /^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(host)
+            ? `<b>${escapeHtml(p.label)}</b> runs on this PC (${escapeHtml(host)}). Your API key stays encrypted on this PC.`
+            : `<span class="chat-foot-warn">☁ <b>${escapeHtml(p.label)}</b> runs on ${escapeHtml(host)}: your questions and the stats the app sends it leave your PC.</span> Your API key stays encrypted on this PC.`;
+        return;
+    }
     const m = currentModelInfo();
     foot.innerHTML = m && m.cloud
         ? `<span class="chat-foot-warn">☁ <b>${escapeHtml(m.name)}</b> runs on Ollama's servers — your questions and the stats the app sends it leave your PC.</span>`
         : `Runs on your PC with Ollama — nothing leaves your machine. Numbers come from your matches; the model's explanations can still be wrong.`;
 }
 
-async function refreshModels() {
-    setStatus('checking', 'Checking Ollama…');
+/** Ollama-only controls; the key bar only for cloud providers. */
+function syncControls() {
+    const think = $('chatThink');
+    if (think && think.closest('label')) think.closest('label').style.display = isCloud() ? 'none' : '';
+    const sel = $('chatProvider');
+    if (sel) sel.value = state.provider;
+}
+
+function renderKeyBar() {
+    const bar = $('chatKeyBar');
+    if (!bar) return;
+    if (!isCloud()) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.style.display = '';
+    const p = providerInfo();
+    const s = state.keyStatus || { saved: false, persisted: true };
+    const where = s.persisted === false
+        ? '<span class="chat-keybar-warn">This PC has no keyring to encrypt it, so it is kept only until you close the app.</span>'
+        : 'Stored encrypted on this PC. Only the app\'s background process can read it.';
+
+    if (s.saved && !state.editingKey) {
+        const forUrl = !p.baseUrl && s.baseUrl ? ` for ${escapeHtml(s.baseUrl)}` : '';
+        bar.innerHTML = `
+            <span class="chat-keybar-text">🔒 <b>${escapeHtml(p.label)}</b> key saved (…${escapeHtml(s.last4 || '')})${forUrl}. ${where}</span>
+            <button class="chat-btn" type="button" data-key-action="change">Change</button>
+            <button class="chat-btn" type="button" data-key-action="remove">Remove</button>`;
+        return;
+    }
+
+    const baseField = p.baseUrl ? '' : `
+        <label class="chat-keyfield">
+            <span>Base URL</span>
+            <input type="url" id="chatBaseUrl" class="chat-input" spellcheck="false" autocomplete="off"
+                   placeholder="https://api.openai.com/v1" value="${escapeHtml(s.baseUrl || '')}">
+        </label>`;
+    const getKey = p.keyUrl
+        ? ` <a href="${escapeHtml(p.keyUrl)}" target="_blank" rel="noopener">Get a ${escapeHtml(p.label)} API key</a>`
+        : '';
+    bar.innerHTML = `
+        <form class="chat-keyform" id="chatKeyForm" autocomplete="off">
+            <label class="chat-keyfield">
+                <span>${escapeHtml(p.label)} API key</span>
+                <input type="password" id="chatKeyInput" class="chat-input" spellcheck="false" autocomplete="off" placeholder="Paste your key">
+            </label>
+            ${baseField}
+            <button class="chat-btn chat-btn--primary" type="submit">Save key</button>
+            ${s.saved ? '<button class="chat-btn" type="button" data-key-action="cancel">Cancel</button>' : ''}
+        </form>
+        <div class="chat-keybar-note">${where}${getKey}</div>
+        <div class="chat-keybar-error" id="chatKeyError" role="alert"></div>`;
+}
+
+async function saveKey() {
+    const input = $('chatKeyInput');
+    const baseUrl = $('chatBaseUrl');
+    const error = $('chatKeyError');
+    const btn = document.querySelector('#chatKeyForm button[type="submit"]');
+    if (btn) btn.disabled = true;
     try {
-        const models = await client.listModels();
-        // Local models first: they're the default and keep data on this PC
-        state.models = models.sort((a, b) => (a.cloud - b.cloud) || a.name.localeCompare(b.name));
-        state.ollamaUp = true;
+        state.keyStatus = await keys.set(state.provider, {
+            key: input ? input.value : '',
+            baseUrl: baseUrl ? baseUrl.value : undefined,
+        });
+        if (input) input.value = '';
+        state.editingKey = false;
+        refreshModels();
     } catch (err) {
+        if (error) error.textContent = err.message;
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function removeKey() {
+    try {
+        state.keyStatus = await keys.remove(state.provider);
+    } catch (err) {
+        console.warn('Chat: removing the key failed:', err.message);
+    }
+    state.editingKey = false;
+    refreshModels();
+}
+
+function pickModel(preferred) {
+    const saved = storageGet(modelKey());
+    const names = state.models.map(m => m.name);
+    state.model = names.includes(saved) ? saved
+                : names.includes(preferred) ? preferred
+                : (state.models.find(m => !m.cloud) || state.models[0] || {}).name || null;
+}
+
+async function refreshModels() {
+    const gen = ++refreshGen;
+    syncControls();
+    renderKeyBar();
+    if (isCloud()) return refreshCloudModels(gen);
+
+    setStatus('checking', 'Checking Ollama…');
+    let models;
+    try {
+        models = await ollama.listModels();
+    } catch (err) {
+        if (gen !== refreshGen) return;
         state.models = [];
-        state.ollamaUp = false;
+        state.up = false;
         setStatus('down', err.code === 'OLLAMA_DOWN' ? 'Ollama not running' : 'Ollama error');
         renderEmptyState(err.message);
         populatePicker();
         return;
     }
-
-    const saved = storageGet(MODEL_KEY);
-    const names = state.models.map(m => m.name);
-    state.model = names.includes(saved) ? saved
-                : names.includes(PREFERRED_MODEL) ? PREFERRED_MODEL
-                : (state.models.find(m => !m.cloud) || state.models[0] || {}).name || null;
-
+    if (gen !== refreshGen) return;
+    // Local models first: they're the default and keep data on this PC
+    state.models = models.sort((a, b) => (a.cloud - b.cloud) || a.name.localeCompare(b.name));
+    state.up = true;
+    pickModel(PREFERRED_MODEL);
     populatePicker();
     updateFoot();
 
@@ -116,13 +249,60 @@ async function refreshModels() {
     if (!state.history.length) renderEmptyState();
 }
 
+async function refreshCloudModels(gen) {
+    const p = providerInfo();
+    state.models = [];
+    state.model = null;
+    state.up = false;
+    populatePicker();
+    setStatus('checking', `Checking ${p.label}…`);
+
+    try {
+        state.keyStatus = await keys.status(state.provider);
+    } catch (err) {
+        state.keyStatus = null;
+    }
+    if (gen !== refreshGen) return;
+    renderKeyBar();
+    updateFoot();
+    if (!state.keyStatus || !state.keyStatus.saved) {
+        setStatus('down', 'No API key');
+        renderEmptyState(`Add your ${p.label} API key above to chat with ${p.label}.`, { retry: false });
+        return;
+    }
+
+    let models;
+    try {
+        models = await client().listModels();
+    } catch (err) {
+        if (gen !== refreshGen) return;
+        setStatus('down', err.code === 'KEY_REJECTED' ? 'Key rejected' : err.code === 'NETWORK' ? 'Offline' : `${p.label} error`);
+        renderEmptyState(err.message);
+        return;
+    }
+    if (gen !== refreshGen) return;
+    state.models = models;
+    state.up = true;
+    pickModel(p.defaultModel);
+    populatePicker();
+    updateFoot();
+
+    if (!state.model) {
+        setStatus('down', 'No models');
+        renderEmptyState(`${p.label} lists no chat models that can use tools for this key.`);
+        return;
+    }
+    setStatus('ready', 'Ready');
+    if (!state.history.length) renderEmptyState();
+}
+
 function populatePicker() {
     const sel = $('chatModel');
     if (!sel) return;
     sel.innerHTML = state.models.length
         ? state.models.map(m =>
             `<option value="${escapeHtml(m.name)}"${m.name === state.model ? ' selected' : ''}>` +
-            `${escapeHtml(m.name)}${m.cloud ? '  ☁ cloud' : ''}</option>`).join('')
+            `${escapeHtml(m.name)}${m.cloud && !isCloud() ? '  ☁ cloud' : ''}</option>`).join('')
         : '<option value="">—</option>';
     sel.disabled = !state.models.length;
 }
@@ -136,7 +316,7 @@ function scrollToBottom() {
     if (box) box.scrollTop = box.scrollHeight;
 }
 
-function renderEmptyState(problem) {
+function renderEmptyState(problem, { retry = true } = {}) {
     const box = $('chatMessages');
     if (!box) return;
     const games = (window.matchesData || []).length;
@@ -149,12 +329,12 @@ function renderEmptyState(problem) {
                 : 'Sync your matches first, then ask away.'}</p>
             ${problem
                 ? `<div class="chat-problem">${escapeHtml(problem)}
-                     <button class="chat-btn" type="button" id="chatRetry">Retry</button></div>`
+                     ${retry ? '<button class="chat-btn" type="button" id="chatRetry">Retry</button>' : ''}</div>`
                 : `<div class="chat-chips">${SUGGESTIONS.map(s =>
                      `<button class="chat-chip" type="button" data-q="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}</div>`}
         </div>`;
-    const retry = $('chatRetry');
-    if (retry) retry.addEventListener('click', refreshModels);
+    const retryBtn = $('chatRetry');
+    if (retryBtn) retryBtn.addEventListener('click', refreshModels);
     box.querySelectorAll('.chat-chip').forEach(chip =>
         chip.addEventListener('click', () => send(chip.dataset.q)));
 }
@@ -239,13 +419,21 @@ function setBusy(busy) {
     }
 }
 
+/** Status after a failed answer; anything that means "not reachable" makes the next send re-check. */
+function statusAfterError(err) {
+    const down = {
+        OLLAMA_DOWN: 'Ollama not running', KEY_REJECTED: 'Key rejected', NO_KEY: 'No API key', NETWORK: 'Offline',
+    }[err.code];
+    if (down) { state.up = false; setStatus('down', down); } else setStatus('ready', 'Ready');
+}
+
 async function send(rawText) {
     const text = String(rawText || '').trim();
     if (!text || state.busy) return;
 
-    if (!state.ollamaUp || !state.model) {
+    if (!state.up || !state.model) {
         await refreshModels();
-        if (!state.ollamaUp || !state.model) return;
+        if (!state.up || !state.model) return;
     }
 
     const input = $('chatInput');
@@ -274,7 +462,9 @@ async function send(rawText) {
 
     state.abort = new AbortController();
     const model = state.model;
-    const think = thinkFlag(model, $('chatThink') && $('chatThink').checked);
+    const cloud = isCloud();
+    const chatClient = client();
+    const think = cloud ? undefined : thinkFlag(model, $('chatThink') && $('chatThink').checked);
 
     try {
         const result = await runAgent({
@@ -283,7 +473,7 @@ async function send(rawText) {
             signal: state.abort.signal,
             describeCall: chatTools.describeCall,
             executeTool: (name, args) => chatTools.executeTool(name, args, ctx),
-            chat: req => client.chat({ ...req, model, think, options: MODEL_OPTIONS }),
+            chat: req => chatClient.chat({ ...req, model, think, options: MODEL_OPTIONS }),
             onEvent: ev => {
                 if (ev.type === 'delta') {
                     streamed += ev.text;
@@ -317,12 +507,11 @@ async function send(rawText) {
             setStatus('ready', 'Ready');
         } else {
             let msg = err.message || 'Something went wrong.';
-            if (/not found/i.test(msg) && /model/i.test(msg)) {
+            if (!cloud && /not found/i.test(msg) && /model/i.test(msg)) {
                 msg += `  In Command Prompt run:  ollama pull ${model}`;
             }
             ui.body.innerHTML = `<div class="chat-error">${escapeHtml(msg)}</div>`;
-            if (err.code === 'OLLAMA_DOWN') { state.ollamaUp = false; setStatus('down', 'Ollama not running'); }
-            else setStatus('ready', 'Ready');
+            statusAfterError(err);
         }
     } finally {
         state.abort = null;
@@ -338,7 +527,8 @@ function stop() {
 function newChat() {
     stop();
     state.history = [];
-    renderEmptyState(state.ollamaUp ? undefined : 'Ollama is not running. Start it, then press Retry.');
+    if (state.up) renderEmptyState();
+    else refreshModels();
 }
 
 // ---------------------------------------------------------------------------
@@ -357,7 +547,42 @@ function init() {
     const form  = $('chatForm');
     const input = $('chatInput');
     const sel   = $('chatModel');
+    const providerSel = $('chatProvider');
+    const keyBar = $('chatKeyBar');
     const thinkBox = $('chatThink');
+
+    const savedProvider = storageGet(PROVIDER_KEY);
+    if (PROVIDER_OPTIONS.some(([id]) => id === savedProvider)) state.provider = savedProvider;
+
+    if (providerSel) {
+        providerSel.innerHTML = PROVIDER_OPTIONS
+            .map(([id, label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`).join('');
+        providerSel.value = state.provider;
+        providerSel.addEventListener('change', () => {
+            if (state.busy) stop();
+            state.provider = providerSel.value;
+            state.keyStatus = null;
+            state.editingKey = false;
+            storageSet(PROVIDER_KEY, state.provider);
+            refreshModels();
+        });
+    }
+
+    if (keyBar) {
+        keyBar.addEventListener('submit', e => {
+            if (e.target.id !== 'chatKeyForm') return;
+            e.preventDefault();
+            saveKey();
+        });
+        keyBar.addEventListener('click', e => {
+            const action = e.target.closest('[data-key-action]');
+            if (!action) return;
+            if (action.dataset.keyAction === 'remove') { removeKey(); return; }
+            state.editingKey = action.dataset.keyAction === 'change';
+            renderKeyBar();
+            if (state.editingKey && $('chatKeyInput')) $('chatKeyInput').focus();
+        });
+    }
 
     if (thinkBox) {
         thinkBox.checked = storageGet(THINK_KEY) === '1';
@@ -377,7 +602,7 @@ function init() {
     input.addEventListener('input', () => autoGrow(input));
     sel.addEventListener('change', () => {
         state.model = sel.value;
-        storageSet(MODEL_KEY, state.model);
+        storageSet(modelKey(), state.model);
         updateFoot();
     });
     $('chatNew').addEventListener('click', newChat);
@@ -386,7 +611,7 @@ function init() {
 window.openChatPanel = function () {
     init();
     // Re-check every time the page is opened: Ollama may have been started
-    // (or a model pulled) since last time.
+    // (or a model pulled, or a key saved) since last time.
     if (!state.busy) refreshModels();
     const input = $('chatInput');
     if (input) setTimeout(() => input.focus(), 50);
