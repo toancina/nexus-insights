@@ -470,7 +470,10 @@ function initDatabase() {
         -- issue #8: your deaths "x,y,sec;…" seen from the blue side
         -- (services/deathMap.js). '' = none / no timeline, NULL = not computed.
         itemPurchases TEXT,
-        deathPositions TEXT
+        deathPositions TEXT,
+        -- Issue #89: your team's win chance per timeline frame, whole % "50,52,…"
+        -- (services/itemWpa.js). '' = no timeline, NULL = not computed.
+        winChance TEXT
       )
     `);
 
@@ -636,6 +639,7 @@ function initDatabase() {
       'laneGaps TEXT',
       'itemPurchases TEXT',
       'deathPositions TEXT',
+      'winChance TEXT',            // item WPA (#89)
       'puuid TEXT'                 // whose game this is (#73)
     ];
     // Only ALTER for columns that are actually missing — the old code fired

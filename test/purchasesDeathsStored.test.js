@@ -35,3 +35,20 @@ test("no timeline: '' for both, so the backfill doesn't keep coming back", () =>
     assert.equal(s.itemPurchases, '');
     assert.equal(s.deathPositions, '');
 });
+
+// #89: your team's win chance per timeline frame, for item WPA
+test('win chance is stored per frame for your team', () => {
+    const { winProbability } = require(path.join(SRC, 'services', 'matchTimeline.js'));
+    const timeline = { info: { frames: [
+        { timestamp: 0, participantFrames: {}, events: [] },
+        { timestamp: 60000, participantFrames: { 1: { totalGold: 500, xp: 0 }, 6: { totalGold: 3000, xp: 0 } }, events: [] },
+    ] } };
+    const red = computeAdvancedStatsForMatch(raw, timeline, 'C7', 200);
+    assert.equal(red.winChance, `50,${Math.round(winProbability(2500, 0, 0) * 100)}`);
+    const blue = computeAdvancedStatsForMatch(raw, timeline, 'C1', 100);
+    assert.equal(blue.winChance, `50,${Math.round(winProbability(-2500, 0, 0) * 100)}`);
+});
+
+test("no timeline stores '' for win chance", () => {
+    assert.equal(computeAdvancedStatsForMatch(raw, null, 'C1', 100).winChance, '');
+});

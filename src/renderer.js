@@ -1330,7 +1330,8 @@ async function backfillAnalyticsInBackground() {
                  m.patch == null ||       // #6
                  m.turretDamage == null ||  // #15
                  m.laneGaps == null ||      // #12
-                 m.itemPurchases == null || m.deathPositions == null   // #7, #8
+                 m.itemPurchases == null || m.deathPositions == null ||  // #7, #8
+                 m.winChance == null        // #89
         );
         if (pending.length === 0) return;
 

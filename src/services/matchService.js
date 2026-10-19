@@ -4,6 +4,8 @@ const { compressJson, decompressJson, decompressJsonAsync } = require('./compres
 const { computeTeamImpact } = require('./teamImpact');
 const { patchOf } = require('./patches');
 const { computeLaneGaps } = require('./laneGaps');
+const { teamSeries } = require('./matchTimeline');
+const { encodeWinChance } = require('./itemWpa');
 const { teammatesOf } = require('./teammates');
 const { purchasesFromTimeline, encodePurchases } = require('./itemBuild');
 const { deathsFromTimeline, encodeDeaths } = require('./deathMap');
@@ -150,7 +152,7 @@ async function getMatches(limit = null) {
                 enemyTeamKills, visionAdvantage, goldShare, statsComputedAt, isRemake,
                 impactScore, impactRank, impactTag, laneOpponent, patch,
                 turretDamage, objectiveDamage, firstDeathAt, laneGaps,
-                itemPurchases, deathPositions
+                itemPurchases, deathPositions, winChance
          FROM matches
          WHERE queueId IN (${[...ALLOWED_QUEUES].join(',')}) AND ${scope.sql}
          ORDER BY gameCreation DESC${limit ? ' LIMIT ?' : ''}`;
@@ -525,6 +527,7 @@ const COMPUTED_STAT_COLUMNS = [
     'turretDamage', 'objectiveDamage', 'firstDeathAt',
     'laneGaps',
     'itemPurchases', 'deathPositions',
+    'winChance',
     // Was a legacy column; recomputed since the dead/alive rule was fixed
     'objectiveRate',
 ];
@@ -578,7 +581,7 @@ async function backfillComputedStats(onProgress) {
         WHERE rawJson IS NOT NULL
           AND (statsComputedAt IS NULL OR impactRank IS NULL OR laneOpponent IS NULL
                OR patch IS NULL OR turretDamage IS NULL OR laneGaps IS NULL
-               OR itemPurchases IS NULL OR deathPositions IS NULL)
+               OR itemPurchases IS NULL OR deathPositions IS NULL OR winChance IS NULL)
         ORDER BY gameCreation DESC
     `);
 
@@ -633,7 +636,8 @@ function computeAdvancedStatsForMatch(matchData, timelineData, myChampionName, m
         patch: null,
         turretDamage: null, objectiveDamage: null, firstDeathAt: null,
         laneGaps: null,
-        itemPurchases: null, deathPositions: null
+        itemPurchases: null, deathPositions: null,
+        winChance: null
     };
 
     try {
@@ -735,6 +739,7 @@ function computeAdvancedStatsForMatch(matchData, timelineData, myChampionName, m
         result.laneGaps = '';
         result.itemPurchases = '';      // #7, '' = no timeline / nothing bought
         result.deathPositions = '';     // #8, '' = no timeline / no deaths
+        result.winChance = '';          // #89, '' = no timeline
         if (!timeline || !timeline.info || !timeline.info.frames) return result;
 
         const frames = timeline.info.frames;
@@ -743,6 +748,9 @@ function computeAdvancedStatsForMatch(matchData, timelineData, myChampionName, m
         // the tooltips, build tables and death map never re-parse timelines ===
         result.itemPurchases  = encodePurchases(purchasesFromTimeline(timeline, myPId));
         result.deathPositions = encodeDeaths(deathsFromTimeline(timeline, myPId, me.teamId));
+
+        // === Your team's win chance per frame, for item WPA (#89) ===
+        result.winChance = encodeWinChance(teamSeries(info, timeline, me.teamId));
 
         // === Gold / XP gap to the lane opponent, minute 0–20 (#12) ===
         if (laneOpponent) {
@@ -958,7 +966,7 @@ async function backfillTimelines(onProgress) {
             const timelineData = await getMatchTimeline(matchId);
             // laneGaps back to NULL: it was stored as '' without a timeline,
             // so the computed-stats backfill has to look at this game again
-            await dbRun("UPDATE matches SET timelineJson = ?, laneGaps = NULL, itemPurchases = NULL, deathPositions = NULL WHERE matchId = ?", [compressJson(timelineData), matchId]);
+            await dbRun("UPDATE matches SET timelineJson = ?, laneGaps = NULL, itemPurchases = NULL, deathPositions = NULL, winChance = NULL WHERE matchId = ?", [compressJson(timelineData), matchId]);
             updated++;
             console.log(`[${i + 1}/${rows.length}] Timeline saved for ${matchId}`);
         } catch (err) {
