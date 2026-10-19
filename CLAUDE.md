@@ -1,6 +1,6 @@
 # Nexus Insights — Project Context
 
-> **Last updated**: 2026-10-15
+> **Last updated**: 2026-10-19
 > **Status**: Active development
 >
 > **2026-10 changes** (details in the Notes section): fixed left nav rail,
@@ -48,40 +48,70 @@ A **League of Legends personal analytics desktop app** built with **Electron + v
 
 ```
 src/
-├── main.js                    # Electron main process, creates window, inits DB
-├── index.html                 # Single-page UI shell (~404 lines)
-├── renderer.js                # Entry point: imports, global state, toast, setup modal (~526 lines)
+├── main.js                    # Electron main process: window, tray, IPC, DB init, updater
+├── index.html                 # Single-page UI shell (~720 lines)
+├── renderer.js                # Entry point: imports, global state, toast, setup modal, page switching (~1,350 lines)
 ├── assets/
 │   ├── ranks/                 # Rank emblem PNGs (Iron → Challenger)
 │   ├── backgrounds/           # 13 region-themed backgrounds
 │   └── badges/Badges.csv      # 39 badge definitions
 ├── components/
-│   ├── analyticsEngine.js     # 9-tab stat calculator + rank benchmark system (699 lines)
+│   ├── analyticsEngine.js     # 9-tab stat calculator + rank benchmark system (~980 lines)
+│   ├── roleRanks.js / roleBenchmarks.js  # Role-weighted badges (#56) / per-role thresholds
+│   ├── roleBreakdown.js       # Roles table under the Overview cards (#10)
+│   ├── rankTiers.js           # The one rank-tier colour palette
 │   ├── badgeEvaluator.js      # Badge evaluation engine (39 badges)
-│   ├── calendarPanel.js       # Activity calendar, time insights, LP progression charts (441 lines)
+│   ├── calendarPanel.js       # Activity calendar, time insights, LP progression charts (~760 lines)
+│   ├── lpCheckpoints.js       # LP card "Checkpoints" popover (#5)
+│   ├── periodFilter.js        # Period dropdown + Win Rate by Patch card (#6)
+│   ├── laneGapChart.js        # Lane Phase gold/XP gap chart (#12)
+│   ├── deathMapPanel.js       # Death Review "Where you die" map (#8)
 │   ├── coachingPanel.js       # Coaching page UI
 │   ├── coachingProgress.js    # Coaching calculations (pure, tested)
-│   ├── coachingEngine.js      # Picks the focus metric
+│   ├── coachingBoard.js       # Coaching habit board (#61, pure, tested)
+│   ├── coachingEngine.js      # Habit metrics; ranks the focus for Chat
 │   ├── chatPanel.js / chatAgent.js / chatTools.js / markdown.js  # Chat page (Ollama)
 │   ├── liveGamePanel.js       # Live page (#59)
 │   ├── championsPanel.js      # Champions page (numbers: services/championStats.js)
+│   ├── teammatesPanel.js      # Allies (Teammates) page (#11)
 │   ├── skins.js / skinsPanel.js   # Skins data + Skins page
 │   ├── statHistory.js         # Click-a-card history chart
 │   ├── winRateColor.js        # Win-rate colour scale
 │   ├── updateButton.js        # ⟳ title-bar update button
-│   ├── filtersPanel.js        # Queue/champion filter logic
-│   ├── matchCard.js           # Match card HTML helpers (icons, runes, spells, duration)
+│   ├── windowControls.js      # Frameless title bar: minimise / maximise / close
+│   ├── filtersPanel.js        # Queue/champion/role filter logic
+│   ├── matchCard.js           # Match row HTML helpers (icons, runes, spells, duration)
+│   ├── itemIcon.js            # Item icon <img> + fallback, shared by every view (#67)
+│   ├── itemDescription.js     # Data Dragon item text → safe tooltip HTML (#37)
 │   ├── matchModal.js          # Inline expanded rows — 10-player table + badges
+│   ├── matchTimelineChart.js  # Timeline chart in an expanded row (#3)
+│   ├── gameReportPanel.js     # Game report in an expanded row (#9)
 │   ├── syncPanel.js           # Sync button handler + progress bar UI
 │   ├── tableRenderer.js       # Match history table rendering + ranked stats
-│   └── tooltipSystem.js       # Item/rune tooltip on hover
+│   ├── tooltipSystem.js       # Item/rune tooltip on hover
+│   └── dom.js                 # escapeHtml and other small helpers (tested)
 ├── services/
-│   ├── riotApi.js             # Riot Games API wrapper (all endpoints)
-│   ├── matchService.js        # Match sync, advanced stats, DB read/write (31k)
-│   ├── database.js            # SQLite schema, migrations, init (368 lines)
+│   ├── riotApi.js             # Riot Games API wrapper (all endpoints, routing)
+│   ├── matchService.js        # Match sync, advanced stats, DB read/write (~1,000 lines)
+│   ├── database.js            # SQLite schema, migrations 1–8, init (~890 lines)
 │   ├── config.js              # Config load/save (%APPDATA%/nexus-insights/)
+│   ├── account.js             # Whose games and LP readings are shown (#73)
+│   ├── setupCheck.js          # Setup dialog's Riot check messages (#74)
 │   ├── dataDragon.js          # Data Dragon CDN: items, runes, spells, champions
 │   ├── compression.js         # JSON gzip compress/decompress
+│   ├── queues.js              # ALLOWED_QUEUES
+│   ├── syncOrder.js           # Sync order / stop rules, seasonStart (#13)
+│   ├── patches.js             # Patch per game + period filter (#6)
+│   ├── timelineRules.js       # Plates and time dead from timeline events
+│   ├── teamImpact.js          # Impact rank, MVP/SVP (#2)
+│   ├── matchTimeline.js       # Timeline series + events (#3)
+│   ├── gameReport.js          # Game report numbers (#9)
+│   ├── itemBuild.js           # Item purchases + build order (#7)
+│   ├── deathMap.js            # Death positions, density, zones (#8)
+│   ├── laneGaps.js            # Per-minute lane gaps (#12)
+│   ├── lpAttribution.js / lpEstimate.js  # Per-game LP (#1) / LP estimates (#5)
+│   ├── championStats.js / teammates.js  # Champions page / Allies page numbers
+│   ├── csvExport.js           # CSV export (#15)
 │   ├── updater.js             # electron-updater wrapper (GitHub Releases)
 │   ├── ollama.js              # Local Ollama client
 │   ├── liveClient.js          # League Live Client Data API
@@ -95,6 +125,8 @@ src/
 ```
 
 **Root files**: `package.json` (no `.env` — the API key lives in the user config; the DB lives in `%APPDATA%/nexus-insights/`)
+
+**Also**: `test/` (`npm test`, Node's built-in runner, ~330 tests, no Electron needed), `scripts/` (build/release, `parity-check`, `diagnose-sync`, `cleanup-matches`, `coaching-report`; see `scripts/README.md`), `installer/` (NSIS include, release notes), `.github/workflows/release.yml`.
 
 ---
 
@@ -111,11 +143,11 @@ src/
   - Activity Calendar (month grid, green-heat intensity) + Time Analytics side panel
   - LP Progression line charts (Canvas) for Solo/Duo and Flex
   - Time-insight mini-cards: Best Time of Day, Best Day of Week, Session Stamina (games 1-3/4-6/7+), Win/Loss Streaks
-  - Match History list (filterable by queue type + champion dropdown), paginated with "Load 20 More / Load All"
+- **Match History page**: the match table, filtered by the top bar, paginated with "Load 50 More / Load All"
 - **Coaching tab**: Solo/Duo only. Rank header, last-game report (‹ › to step back), habit board (tickets in Slipping / Needs work / Improving / On track, click for detail), area trends with sparklines, collapsed Details. See "Coaching page (rewritten 2026-10)" below.
 - **Match table**: no Result column (the row colour says win/loss; MVP/SVP sits next to the champion). KDA is (K + A) / max(1, D) everywhere: no "Perfect".
 - **Expanded Match Rows**: clicking a match-table row expands an inline game timeline chart, a game report (#9) (win chance / gold lead / XP lead with event markers) and a full 10-player breakdown (both teams): team impact rank with MVP/SVP, items, runes, summoner spells, KDA, CS/min, damage, GD@15/XPD@15, pings, tower damage. Badge awards shown at the top. (The old full-screen Match Detail Modal was removed 2026-07 — it had become unreachable.)
-- **Setup Modal**: First-run flow — API key (password field), Summoner Name # Tag, Region (select), Platform (select). Accessible anytime via the settings button.
+- **Setup Modal**: First-run flow — API key (password field), Summoner Name # Tag, Server (select; Region is derived from it and shown disabled), checked against Riot on Save (#74). Accessible anytime via the settings button.
 - **Item/Rune Tooltip**: Hover over any item icon or rune to see name + description.
 
 ---
@@ -158,9 +190,9 @@ from `computeTabStats`. Full description: "Coaching page (rewritten 2026-10)" in
 
 ### Match History
 
-- Cards list, newest first, showing: champion icon, position, mode, result (Win/Loss), KDA, CS, damage, vision, items strip, time ago
-- Filters: queue type checkboxes (Ranked Solo, Ranked Flex, Premade, Normal) + champion dropdown
-- Pagination: 50 shown initially, "Load 20 More" or "Load All" buttons
+- Table, newest first (its own page): champion icon, position, mode, KDA, CS, damage, vision, LP change, items strip, time ago; the row colour gives the result
+- Filters: the shared top bar (game modes, period, champion, role)
+- Pagination: 50 shown initially, "Load 50 More" or "Load All" buttons
 - Click any row → expands the inline 10-player breakdown
 
 ---
@@ -336,8 +368,8 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 3. Load Data Dragon assets (items, runes, spells, champion list)
 4. Check config validity → show setup modal if invalid
 5. Load match history from DB → render match cards + ranked stats + analytics cards
-6. Init calendar + LP charts; seed LP history snapshots (INSERT OR IGNORE)
-7. User can: sync new matches, switch analytical sub-tabs, filter by queue/champion, open match detail modal, switch to Coaching tab
+6. Init calendar + LP charts (no seeding: LP history comes from readings and checkpoints, #5); start `backfillAnalyticsInBackground`
+7. User can: sync new matches, switch analytical sub-tabs, filter, expand a match row, switch pages from the nav rail
 
 ---
 
@@ -349,7 +381,7 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 | `showToast(title, msg, duration)` | Toast notification (exposed on `window`) |
 | `showSetupModal(isFirstTime)` | First-time config / Settings modal |
 | `saveSetup()` | Validate + persist config, reload app |
-| `switchTopTab(tab)` | Switch between Analytics and Coaching |
+| `switchTopTab(tab)` | Switch page (`TOP_TABS`: analytics, history, champions, teammates, live, coaching, chat, skins) |
 | `loadMatchHistory()` | Load + render matches from DB |
 | `renderMatchHistory()` | Render match card list |
 | `loadMoreMatches()` / `loadAllMatches()` | Pagination controls |
@@ -368,8 +400,8 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 |----------|---------|
 | `window.renderCoachingPanel()` | Main entry — renders from `window.matchesData` (Solo/Duo, remakes excluded) |
 | `window.coachingStep(n)` | Step the game-by-game report back/forward |
-| `window.coachingSetFocus/ClearFocus` | Pin or release the focus metric |
 | `rankHeader / lastGameReport / focusHits / areaTrends` | Pure calculators in `coachingProgress.js` (tested) |
+| `coachingBoard.js` | Habit board columns (#61; replaced the pinned focus, `coachingSetFocus` is gone) |
 
 ### calendarPanel.js
 | Function | Purpose |
@@ -487,7 +519,6 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 - All rendering is DOM manipulation — no virtual DOM or framework
 - CSS uses custom properties for theming (dark theme, gold/teal accents)
 - `electron-builder` targets: Windows NSIS x64, macOS dmg, Linux AppImage (see "macOS / Linux builds")
-- `coachingPanel.js` opens its **own** SQLite connection (read-only) because it is lazily loaded and needs a direct DB handle separate from the main `database.js` singleton
 
 ### Lazy JSON Loading (perf-critical)
 
@@ -495,7 +526,7 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 
 - `getMatches()` returns scalar columns only. `window.matchesData` rows have **no** `rawJson`/`timelineJson` properties
 - `matchService.js` owns the blob cache (`loadRawJson` / `loadTimelineJson` → `getCachedRawJson` / `getCachedTimelineJson`)
-- `analyticsEngine.TAB_JSON_NEEDS` declares which sub-tabs need which blob. Only Lane Phase / Combat / Death Review need timelines; Vision / Economy need rawJson; Overview, Objectives, Macro and Consistency need neither and parse nothing
+- `analyticsEngine.TAB_JSON_NEEDS` declares which sub-tabs need which blob. Lane Phase / Combat / Death Review need timelines and rawJson; Vision / Economy need rawJson only; Overview, Objectives, Macro and Consistency need neither and parse nothing
 - `window.prefetchTabJson(tab, ...matchLists)` is awaited by `renderAnalyticsTab()` **before** any DOM mutation, with a staleness guard so a slower render can't overwrite a newer one
 - `renderFilteredMatches()` prefetches rawJson for the **visible page only** (match cards read summoner spells out of it)
 - `getMatchById()` still does `SELECT *`, so the match modal / expanded row / badge evaluator get full blobs for a single match. `toggleRowExpand` must pass that full row to `createExpandedRow`, not the light `matchesData` row
@@ -679,6 +710,16 @@ In every expanded match row, under the timeline (`components/gameReportPanel.js`
 - At most three points per section. The report uses `fitWidth` from
   matchTimelineChart.js, like the chart, because the expanded row is as
   wide as the sideways-scrolling table.
+### Item icons (2026-10, issue #67)
+
+`components/itemIcon.js` `itemImg(id, { patch, extra })` builds every item
+icon (match table, expanded row, Champions page). Items in today's item.json
+use the current Data Dragon version (one URL per item, shared by the browser
+cache); removed items use the version of the game's own patch
+(`patches.ddragonVersionForPatch`). On error: retry from the current
+version once, then a "removed item" placeholder (`.item-missing`). Don't
+build item `<img>` tags by hand elsewhere.
+
 ### Item builds (2026-10, issue #7)
 
 - `itemPurchases` column: your purchases as `"itemId:seconds,…"`, oldest
@@ -712,7 +753,10 @@ In every expanded match row, under the timeline (`components/gameReportPanel.js`
   games): Data Dragon's `img/map/map11.png` dimmed, one dot per death, amber
   → red by how many deaths are within 600 units. "Dense" is relative to the
   95th percentile, and dots shrink/fade with the count, so hundreds of games
-  still show the map's shape.
+  still show the map's shape. Neighbours are counted via a 600-unit grid
+  (`densityDots`, each death checks only the 9 cells around it), not all
+  pairs: ~10,000 deaths went from 1–2 s to ~18 ms (#66). The panel caches
+  the sorted dots, so a redraw doesn't recompute them.
 - **Zones by phase:** along the base-to-base diagonal ((x + y) / 2M): < 0.35
   near your base, > 0.65 enemy territory, else mid-map; phases ≤ 14:00, ≤
   25:00, later. The takeaway names the biggest change (near-base or
