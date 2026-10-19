@@ -1,6 +1,6 @@
 # Nexus Insights — Project Context
 
-> **Last updated**: 2026-10-19
+> **Last updated**: 2026-10-20
 > **Status**: Active development
 >
 > **2026-10 changes** (details in the Notes section): fixed left nav rail,
@@ -70,8 +70,10 @@ src/
 │   ├── coachingProgress.js    # Coaching calculations (pure, tested)
 │   ├── coachingBoard.js       # Coaching habit board (#61, pure, tested)
 │   ├── coachingEngine.js      # Habit metrics; ranks the focus for Chat
-│   ├── chatPanel.js / chatAgent.js / chatTools.js / markdown.js  # Chat page (Ollama)
-│   ├── liveGamePanel.js       # Live page (#59)
+│   ├── chatPanel.js / chatAgent.js / chatTools.js / markdown.js  # Chat page (Ollama or a cloud API key)
+│   ├── chatRemote.js          # Chat: the window's side of cloud providers (IPC to services/chatBridge.js, #91)
+│   ├── liveGamePanel.js       # Live page (#59), Next item card (#90)
+│   ├── itemKinds.js           # Which items count as a build (Champions + Live)
 │   ├── championsPanel.js      # Champions page (numbers: services/championStats.js)
 │   ├── teammatesPanel.js      # Teammates page (#11)
 │   ├── skins.js / skinsPanel.js   # Skins data + Skins page
@@ -115,6 +117,9 @@ src/
 │   ├── csvExport.js           # CSV export (#15)
 │   ├── updater.js             # electron-updater wrapper (GitHub Releases)
 │   ├── ollama.js              # Local Ollama client
+│   ├── openaiChat.js / chatBridge.js / chatProviders.js  # Cloud chat: client, main-process bridge, providers (#91)
+│   ├── secretStore.js         # Chat API keys, encrypted with safeStorage (main only, #91)
+│   ├── nextItem.js            # Live page: next item from your games + item WPA (#90)
 │   ├── liveClient.js          # League Live Client Data API
 │   ├── liveGame.js / liveGameLoader.js / liveGameStore.js  # Live page: rules, Riot calls, cache (#59)
 │   ├── riotErrors.js          # User-facing text for Riot API errors (sync + Live)
@@ -127,7 +132,7 @@ src/
 
 **Root files**: `package.json` (no `.env` — the API key lives in the user config; the DB lives in `%APPDATA%/nexus-insights/`)
 
-**Also**: `test/` (`npm test`, Node's built-in runner, ~330 tests, no Electron needed), `scripts/` (build/release, `parity-check`, `diagnose-sync`, `cleanup-matches`, `coaching-report`; see `scripts/README.md`), `installer/` (NSIS include, release notes), `.github/workflows/release.yml`.
+**Also**: `test/` (`npm test`, Node's built-in runner, ~420 tests, no Electron needed), `scripts/` (build/release, `parity-check`, `diagnose-sync`, `cleanup-matches`, `coaching-report`; see `scripts/README.md`), `installer/` (NSIS include, release notes), `.github/workflows/release.yml`.
 
 ---
 
@@ -666,7 +671,41 @@ while the live watcher (`pollLiveClient`) sees a game.
   `/activeplayername` and `/gamestats` from a self-signed HTTPS server on
   127.0.0.1:2999 (a real game's participants make a good fixture). The live
   watcher then sees a "game"; quit the app before stopping the server, or
-  the game-end handler runs a sync.
+  the game-end handler runs a sync. **Every** running copy with auto-logging
+  on sees that fake game, including one you didn't start, so stop other
+  copies first. A second copy for testing needs its own data folder (an
+  Electron `-r` hook that calls `app.setPath('appData' / 'userData')`, plus
+  `HOME` for the renderer) and, on macOS, `--use-mock-keychain`: a fresh
+  profile otherwise asks for the login keychain password and blocks main.
+
+### Next item on the Live page (2026-10, issue #90)
+
+Your row on the Live page shows the items you hold (playerlist `items`, now
+in `parsePlayers`) and a **Next item** card: what you bought next in your
+stored games on this champion when you had exactly the same finished
+items, ranked by average item WPA (#89).
+
+- `services/nextItem.js` (pure, tested). `championGames` takes your games on
+  the champion (Data Dragon id, case-insensitive: Match-V5 says
+  "FiddleSticks") with `itemPurchases`, in your position when 5+ of them
+  were played there, else every role; WPA per purchase from `winChance`.
+  `nextItemOptions` walks each game's finished items in purchase order
+  (each item once, its first purchase); a game matches when its first k
+  finished items are exactly yours. Candidate = the next finished item you
+  don't own. Ranked by average WPA once 5 games have one, the rest below by
+  games.
+- **Fallback:** with under 5 matching games, the largest subset of your
+  items with 5+ (the one with the most games at that size) is used, and the
+  card says which items it is based on. The Live Client lists items by
+  slot, not purchase order, so "drop the oldest item" isn't possible.
+- "Finished" is `components/itemKinds.js` `isBuildItem` (moved out of the
+  Champions page): `isCoreItem` minus boots, like the Build order card.
+- Only for the account in Settings (`isConfiguredAccount`), from
+  `excludeRemakes(window.matchesData)`; no JSON blobs, no Riot calls. The
+  card is cached by champion + role + items.
+- Your items are re-read every 10 s (`ITEM_POLL_MS`, its own timer, so it
+  works with auto-logging off) until the game ends or Detect is clicked
+  again. Real data: ~5 ms per lookup on 200 games.
 
 ### Teammates page (2026-10, issue #11)
 
@@ -1063,7 +1102,7 @@ icon over label. `openNavDrawer/closeNavDrawer/toggleNavDrawer` in renderer.js
 are kept as no-ops so older callers don't break. Pages: Analytics, Match
 History, Champions, Teammates, Live, Coaching, Chat, Skins (`TOP_TABS` in renderer.js).
 
-### Chat page (Ollama) — 2026-10
+### Chat page (Ollama, or a cloud API key) — 2026-10
 
 Chat with your match data using a **local** Ollama model (default `qwen3:8b`)
 at `http://127.0.0.1:11434`. The model never computes a number: it calls tools
@@ -1088,6 +1127,46 @@ and the app answers with values from the same formulas as the stat cards.
 - Tests: `chatTools`, `ollama` (fake HTTP server), `chatAgent`, `markdown` (XSS).
   `chatPanel.js` itself needs Electron + sqlite and is checked by hand.
 - **If you add a tool**, add its schema to `TOOLS` and a `describeCall` label.
+
+**Cloud providers (#91).** A Provider dropdown: Ollama (default), Mistral, or
+any OpenAI-compatible API (base URL + key: OpenAI, OpenRouter, Groq, LM
+Studio…). `services/chatProviders.js` lists them; to add one with a fixed
+URL, add an entry there.
+
+- **The key never reaches the window.** The window has Node access and no
+  context isolation, so anything it holds, any injected script could read.
+  The user pastes the key in the Chat page's key bar; `chat:setKey` sends it
+  to main and the window only ever gets `{ saved, last4, persisted, baseUrl }`
+  back. Main (`services/chatBridge.js`, wired by `registerChatIpc` in main.js)
+  decrypts it and makes every call (`chat:models`, `chat:send`; text streams
+  back on `chat:delta` / `chat:thinking`, Stop sends `chat:abort`). The
+  window's side is `components/chatRemote.js`, same shape as the Ollama client.
+- **Storage:** `services/secretStore.js` encrypts with Electron `safeStorage`
+  and writes only ciphertext to `secrets.json` (mode 600) in the data folder,
+  never config.json. The base URL is encrypted **with** the key, and calls
+  never take a URL from the window, so neither a script nor an edit of the
+  file can send the key elsewhere. No real encryption (Linux without a
+  keyring: backend `basic_text`) → kept in memory for this run only, and the
+  bar says so.
+- **URLs:** https only; plain http only for 127.0.0.1 / localhost / [::1]
+  (`isAllowedBaseUrl`). Mistral's URL is fixed.
+- `services/openaiChat.js`: `/models` (Mistral's `capabilities` → chat + tool
+  calling; OpenAI-style lists drop embedding/tts/whisper/… by name) and
+  streaming `/chat/completions` (SSE). `toOpenAiMessages` converts the
+  agent's Ollama-format conversation: string tool arguments, a
+  `tool_call_id` on each result (generated ids are 9 letters/digits, which
+  Mistral requires), and a later system message becomes a user message
+  (Mistral rejects a conversation ending on system). Errors: 401/403
+  `KEY_REJECTED`, 429 `RATE_LIMIT`, no connection `NETWORK`; provider
+  messages are scrubbed of the key. IPC drops `err.code`, so the bridge
+  answers `{ ok, value | error }` (`settle`).
+- Provider and per-provider model persist in localStorage (`nexus.chatProvider`,
+  `nexus.chatModel.<provider>`). Think harder is Ollama-only.
+- Tests: `secretStore` (fake safeStorage, nothing plain on disk),
+  `openaiChat` (fake provider), `chatBridge` (window client → fake IPC with
+  structured clone → bridge → client → fake provider).
+- macOS: the first safeStorage use can show a Keychain prompt and blocks main
+  until answered; that is Electron's normal behaviour.
 
 ### Updates from GitHub (titlebar ⟳ button) — 2026-10
 
