@@ -1,0 +1,108 @@
+/**
+ * itemWpa.js — win probability added (WPA) for item purchases (#89). Pure.
+ *
+ * WPA of a purchase = your team's estimated win chance at the end of its
+ * window minus at the purchase, in percentage points. The window runs to your
+ * next trip to the shop (your first purchase at least TRIP_GAP_MS later), at
+ * most WINDOW_CAP_MS, and stops at the last timeline frame. So everything you
+ * buy on one trip shares an end, and items bought late don't just measure
+ * whether you won.
+ *
+ * The win chance is matchTimeline's estimate (#3). Stored rows carry it in the
+ * `winChance` column, one whole percentage per timeline frame; expanded rows
+ * compute it from the full timeline. It describes what happened while you had
+ * the item, not what the item caused.
+ */
+
+const { FIRST_BACK_WINDOW_MS } = require('./itemBuild');
+
+const TRIP_GAP_MS   = FIRST_BACK_WINDOW_MS;   // same 60 s the "First back" row uses
+const WINDOW_CAP_MS = 5 * 60 * 1000;
+const FRAME_MS      = 60 * 1000;
+
+/** teamSeries output → "50,52,49" (whole %); '' for none. */
+function encodeWinChance(series) {
+    return (series || []).map(s => Math.round(s.winProb * 100)).join(',');
+}
+
+/** "50,52,49" → [50, 52, 49]; [] if empty or any value isn't a whole 0–100. */
+function decodeWinChance(text) {
+    if (!text) return [];
+    const parts = String(text).split(',');
+    if (!parts.every(s => /^\d{1,3}$/.test(s) && Number(s) <= 100)) return [];
+    return parts.map(Number);
+}
+
+/**
+ * Stored win chance → [{t, p}]. Frame i is at i minutes, except the last,
+ * which Riot puts at the game's end (clamped to its minute).
+ */
+function winChancePoints(text, gameDurationSec) {
+    const values = decodeWinChance(text);
+    const n = values.length;
+    return values.map((p, i) => {
+        let t = i * FRAME_MS;
+        if (i === n - 1 && n > 1 && Number.isFinite(gameDurationSec)) {
+            t = Math.min(i * FRAME_MS, Math.max((i - 1) * FRAME_MS, gameDurationSec * 1000));
+        }
+        return { t, p };
+    });
+}
+
+/** A full teamSeries (expanded rows) → [{t, p}] in percent. */
+function seriesPoints(series) {
+    return (series || []).map(s => ({ t: s.t, p: s.winProb * 100 }));
+}
+
+/** Win chance (%) at `t`, linear between frames, held at both ends; null with no points. */
+function chanceAt(points, t) {
+    if (!points || !points.length) return null;
+    if (t <= points[0].t) return points[0].p;
+    const last = points[points.length - 1];
+    if (t >= last.t) return last.p;
+    for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1], b = points[i];
+        if (t <= b.t) return b.t === a.t ? b.p : a.p + (b.p - a.p) * (t - a.t) / (b.t - a.t);
+    }
+    return last.p;
+}
+
+/**
+ * WPA for every purchase (oldest first), aligned with `purchases`:
+ * { itemId, t, from, to, wpa } in percent, or null for all when there's no
+ * win chance. Each purchase counts on its own, repeats included.
+ */
+function itemWpa(purchases, points) {
+    const list = purchases || [];
+    if (!points || !points.length) return list.map(() => null);
+    const lastT = points[points.length - 1].t;
+    return list.map(p => {
+        const next = list.find(q => q.t - p.t >= TRIP_GAP_MS);
+        const end = Math.max(p.t, Math.min(next ? next.t : Infinity, p.t + WINDOW_CAP_MS, lastT));
+        const from = chanceAt(points, p.t);
+        const to = chanceAt(points, end);
+        return { itemId: p.itemId, t: p.t, from, to, wpa: to - from };
+    });
+}
+
+/** itemId → { from, to } (whole %) of its last purchase, for tooltips like "Bought at". */
+function lastPurchaseWpa(purchases, points) {
+    const out = new Map();
+    for (const w of itemWpa(purchases, points)) {
+        if (w) out.set(w.itemId, { from: Math.round(w.from), to: Math.round(w.to) });
+    }
+    return out;
+}
+
+/** Tooltip line: "Win chance 46% → 58% (+12) until your next trip to the shop". */
+function wpaLine(from, to) {
+    const d = to - from;
+    const change = d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '0';
+    return `Win chance ${from}% → ${to}% (${change}) until your next trip to the shop`;
+}
+
+module.exports = {
+    TRIP_GAP_MS, WINDOW_CAP_MS,
+    encodeWinChance, decodeWinChance, winChancePoints, seriesPoints, chanceAt,
+    itemWpa, lastPurchaseWpa, wpaLine,
+};
