@@ -73,7 +73,7 @@ src/
 │   ├── chatPanel.js / chatAgent.js / chatTools.js / markdown.js  # Chat page (Ollama)
 │   ├── liveGamePanel.js       # Live page (#59)
 │   ├── championsPanel.js      # Champions page (numbers: services/championStats.js)
-│   ├── teammatesPanel.js      # Allies (Teammates) page (#11)
+│   ├── teammatesPanel.js      # Teammates page (#11)
 │   ├── skins.js / skinsPanel.js   # Skins data + Skins page
 │   ├── statHistory.js         # Click-a-card history chart
 │   ├── winRateColor.js        # Win-rate colour scale
@@ -110,7 +110,7 @@ src/
 │   ├── deathMap.js            # Death positions, density, zones (#8)
 │   ├── laneGaps.js            # Per-minute lane gaps (#12)
 │   ├── lpAttribution.js / lpEstimate.js  # Per-game LP (#1) / LP estimates (#5)
-│   ├── championStats.js / teammates.js  # Champions page / Allies page numbers
+│   ├── championStats.js / teammates.js  # Champions page / Teammates page numbers
 │   ├── csvExport.js           # CSV export (#15)
 │   ├── updater.js             # electron-updater wrapper (GitHub Releases)
 │   ├── ollama.js              # Local Ollama client
@@ -134,9 +134,9 @@ src/
 
 - **Dark theme** throughout, with gold/teal CSS custom property accents
 - **Title bar**: Nexus logo + name on the left, ⟳ update button and ⚙ settings (SVG) top-right
-- **Left nav rail** (always visible): Analytics (default), Match History, Champions, Allies (the Teammates page; the full word wraps in the 78px rail), Live, Coaching, Chat, Skins
+- **Left nav rail** (always visible): Analytics (default), Match History, Champions, Teammates (one line in the 78px rail: `white-space: nowrap`, #87), Live, Coaching, Chat, Skins
 - **Analytics tab**:
-  - The **shared top bar** (#52) above the page: Summoner Name # Tag, "Sync Matches", game-mode / period / champion / role filters, and the sync progress bar. Shown on Analytics, Match History, Champions and Allies, pinned under the title bar while scrolling
+  - The **shared top bar** (#52) above the page: Summoner Name # Tag, "Sync Matches", game-mode / period / champion / role filters, and the sync progress bar. Shown on Analytics, Match History, Champions and Teammates, pinned under the title bar while scrolling
   - 9 analytical sub-tabs (pill-button row): Overview · Lane Phase · Combat · Death Review · Objectives · Vision · Economy · Macro · Consistency
   - Stat cards grid below the sub-tabs — each card shows value, rank benchmark colour, and a trend arrow vs. the previous period
   - Ranked Solo/Duo and Ranked Flex cards (rank emblem image + tier text + W-L-WR%)
@@ -630,7 +630,7 @@ tested). Nav rail button between Match History and Coaching.
 
 `components/liveGamePanel.js`: **Detect live game** lists the 10 players of the game running on this PC
 with rank, mastery on their champion, last 10 Solo/Duo games and tags, like
-Blitz/Porofessor. Nav button "Live" (after Allies); its badge says `LIVE`
+Blitz/Porofessor. Nav button "Live" (after Teammates); its badge says `LIVE`
 while the live watcher (`pollLiveClient`) sees a game.
 
 - **Players** come from the local Live Client Data API
@@ -966,7 +966,7 @@ Under the Lane Phase cards: average gold and XP minus your lane opponent's
 - `switchTopTab` → `updateTopBar(tab)` (renderer.js) toggles
   `body.has-top-bar` for `TOP_BAR_PAGES` (analytics, history, champions,
   teammates) and disables `#champFilter` / `#roleFilter` with an explaining
-  title on Champions and Allies, which ignore them. `<body>` starts with the
+  title on Champions and Teammates, which ignore them. `<body>` starts with the
   class, since Analytics is the first page.
 - **Page scroll area (#80):** the window never scrolls (`html, body`
   overflow hidden, body a flex column). `.top-bar` sits in the flow below
@@ -976,7 +976,8 @@ Under the Lane Phase cards: average gold and XP minus your lane opponent's
   window-scrolling layout let content show through both and made the bar
   jump 12 px. One scroll per page: Match History's table and the two
   Champions columns (≥ 1201 px wide) fill the area and scroll themselves;
-  Allies' column headers stick. Pages keep only the gutter as top padding.
+  Teammates' column headers stick. The gutter is `#pageScroll`'s padding
+  (see "Pages" under UI polish).
   `switchTopTab` remembers each page's scroll position. **Scroll
   `#pageScroll`, never `window`**; `body.modal-open` locks `#pageScroll`.
   `#matchHistory` is shown with `style.display = ''` (CSS makes it flex).
@@ -1033,7 +1034,7 @@ The sliding drawer is gone. `#navDrawer` carries `nav-rail` and is always
 visible (78px, `--nav-rail-width`; `body` is padded by that). Buttons stack
 icon over label. `openNavDrawer/closeNavDrawer/toggleNavDrawer` in renderer.js
 are kept as no-ops so older callers don't break. Pages: Analytics, Match
-History, Champions, Allies, Live, Coaching, Chat, Skins (`TOP_TABS` in renderer.js).
+History, Champions, Teammates, Live, Coaching, Chat, Skins (`TOP_TABS` in renderer.js).
 
 ### Chat page (Ollama) — 2026-10
 
@@ -1131,11 +1132,33 @@ sent to the browser (`setWindowOpenHandler` / `will-navigate` in main.js).
   inside a card) < `--z-sticky` (10) < `--z-topbar` (40) < `--z-nav` (100) <
   `--z-popover` (500) < `--z-modal` (1000) < `--z-toast` < `--z-tooltip` <
   `--z-confetti` < `--z-titlebar` (2000, so window buttons work over a dialog).
-  `.app-container` has **no** z-index (it made each page its own layer, so the
-  Settings dialog was drawn under the top bar and the whole Match History list).
+  `.page` / `.page-tab` have **no** z-index (the old `.app-container` had one,
+  which made each page its own layer, so the Settings dialog was drawn under
+  the top bar and the whole Match History list).
   Dialogs live at the end of `<body>`, outside the pages; `body.modal-open`
   stops the page scrolling behind one. `test/zindex.test.js` fails on a raw
   z-index number, an undefined layer, or the dialog moving back into a page.
+- **Pages (#87).** Every page uses the same components (polish.css, "Pages"):
+  `<div id="…-tab" class="page-tab">` → `<section class="page">` (the glass
+  card; every page is **full width** on the one gutter, so switching pages
+  never moves the content's left edge) → `<header class="page-header">` with
+  `.page-heading` (`h2.page-title` + one-line `p.page-desc`) and optional
+  `.page-actions` on the right (Match History's count badge, Live's Detect
+  button, Chat's controls). Boxes inside a page are panels: `.panel`, or an
+  existing class listed in the panel rule (`--surface` / `--line` /
+  `--r-card`), labelled with `.panel-title` (or a class grouped with it).
+  Data tables (`.match-table`, `.team-table-expanded`, `.ch-table`,
+  `.ch-subtable`, `.tm-table`, `.rb-table`, `.gr-table`, `.dm-table`) share one
+  header band (`--table-head-bg`), cell padding, divider and `.num` alignment;
+  add a new table's class to those `:is(...)` lists. Pages that fill the area
+  and scroll inside add `page-tab--fill` (Match History, Chat) or
+  `page-tab--fill-wide` (Champions, ≥ 1201 px only). `switchTopTab` shows a
+  page with `style.display = ''` (CSS makes `.page-tab` a flex column), not
+  `'block'`. The old shells (`.app-container`, `.main-card`,
+  `.champions-shell`, `.coaching-shell`, `.chat-shell`, `.skins-shell`,
+  `.coach-header`, `.chat-header`) are gone; don't bring back per-page widths.
+  Sticky table headers in the page scroll area use
+  `top: calc(-1 * var(--gutter))` so rows don't show above them.
 - **Never hard-code the accent.** Use `var(--accent-primary)`,
   `rgba(var(--accent-rgb), a)`, `--accent-deep`, `--on-accent`, `var(--gold)`,
   `rgba(var(--gold-rgb), a)`. `test/skins.test.js` fails if `#00cfbc` or

@@ -228,20 +228,6 @@ select:focus-visible {
 body.window-maximized .titlebar-btn .icon-maximize { display: none; }
 body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 
-/* Main container */
-.app-container {
-    position: relative;
-    max-width: 95%;
-    margin: 0 auto;
-    /* The header is gone (app name lives in the title bar) and the section
-       tabs moved into the off-canvas left drawer, so content starts right
-       under the title bar. All four sides share the same 24px so the page
-       reads as evenly framed; the arrow tab (26px, fixed-positioned) floats
-       on top of that margin rather than needing extra clearance carved out
-       of it. */
-    padding: calc(var(--titlebar-height) + 10px) 24px 24px 24px;
-}
-
 /* Header — the centred logo. The settings gear and window buttons live in the
    title bar, so the logo is free to sit high and stay vertically balanced:
    the gap above it (app-container top padding) equals the gap below it. */
@@ -310,21 +296,6 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     color: var(--text-primary);
     transform: rotate(90deg) scale(1.1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* Main card */
-.main-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-primary);
-    border-radius: var(--radius-lg);
-    /* Reduced top padding: the input row lost its labels, so the old 28px
-       now reads as a gap rather than breathing room. */
-    padding: 18px 32px 28px;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    transition: all 0.4s var(--transition-smooth);
 }
 
 .card-header {
@@ -801,9 +772,6 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     }
 }
 
-.main-card {
-    animation: fadeIn 0.6s ease-out;
-}
 
 .stats-grid .stat-card {
     animation: fadeIn 0.6s ease-out backwards;
@@ -819,11 +787,6 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 
 .stats-grid .stat-card:nth-child(3) {
     animation-delay: 0.3s;
-}
-
-/* Match History Section */
-.match-history {
-    margin-top: 24px;
 }
 
 /* Filter section */
@@ -3723,13 +3686,8 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 .nav-badge:empty { display: none; }
 
 /* ============================================================
-   COACHING PANEL SHELL
+   COACHING PANEL (the page shell is .page, polish.css)
    ============================================================ */
-.coaching-shell {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 28px 24px 60px;
-}
 
 /* ── Loading state ── */
 .coaching-loading {
@@ -4257,9 +4215,6 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
    here". It sits on the non-scrolling parent so it stays put
    while the table scrolls underneath it.
    ──────────────────────────────────────────────────────────── */
-.match-history {
-    position: relative;
-}
 
 .match-history .match-table-container {
     position: relative;
@@ -4289,26 +4244,8 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
    One focus, a short watch list, evidence collapsed away. The
    old .coaching-* card styles are superseded by these.
 ══════════════════════════════════════════════════════════ */
-.coach-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 22px;
-}
 
-.coach-header h2 {
-    margin: 0;
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
 
-.coach-header p {
-    margin: 4px 0 0;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
 
 .coach-dim { color: var(--text-tertiary); font-weight: 400; }
 
@@ -5629,11 +5566,6 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     color: var(--accent-primary, var(--accent-primary));
 }
 
-/* The Match History page has no card header of its own above the table */
-#history-tab .main-card {
-    padding-top: 20px;
-}
-
 /* Sync progress detail counters (was inline styles in index.html) */
 .progress-details {
     margin-top: 8px;
@@ -5937,26 +5869,6 @@ body {
 /* ==========================================================================
    Chat page (components/chatPanel.js)
    ========================================================================== */
-.chat-shell {
-    max-width: 920px;
-    margin: 0 auto;
-    padding: 20px 24px 14px;
-    height: calc(100vh - var(--titlebar-height) - 4px);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    box-sizing: border-box;
-}
-.chat-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-.chat-title { margin: 0; font-size: var(--font-lg); color: var(--gold-light); font-weight: 700; }
-.chat-sub   { margin: 4px 0 0; font-size: var(--font-sm); color: var(--text-secondary); }
-.chat-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 .chat-status {
     display: inline-flex; align-items: center; gap: 6px;
@@ -6100,11 +6012,6 @@ body {
    Sortable champion table on the left, the picked champion's rune
    pages, items and matchups on the right.
    ──────────────────────────────────────────────────────────── */
-.champions-shell {
-    max-width: 1500px;
-    margin: 0 auto;
-    padding: calc(var(--titlebar-height) + var(--gutter)) 24px 40px;
-}
 
 .champions-layout {
     display: grid;

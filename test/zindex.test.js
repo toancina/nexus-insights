@@ -39,6 +39,9 @@ test('the Settings dialog sits at page level, not inside a page', () => {
     const modal = html.indexOf('id="setupModal"');
     const lastPageEnd = html.lastIndexOf('id="chat-tab"');
     assert.ok(modal > lastPageEnd, 'setupModal comes after the last page');
-    // .app-container must not be its own layer again
-    assert.ok(!/\.app-container\s*\{[^}]*z-index/.test(read('app.css')), '.app-container has no z-index');
+    // The page shell must not be its own layer (#63, #87): the dialog is
+    // drawn above whatever page is open
+    for (const f of files) {
+        assert.ok(!/\.page(-tab)?\s*\{[^}]*z-index/.test(read(f)), `${f}: .page / .page-tab have no z-index`);
+    }
 });
