@@ -6,7 +6,7 @@
 const { getLpReadings, getLpDeltasByMatch } = require('../services/matchService');
 const { buildLpEstimates, nextDivision, rankLabel } = require('../services/lpEstimate');
 const { wrColor, wrTextColor } = require('./winRateColor');
-const { escapeHtml } = require('./dom');
+const { escapeHtml, formatInt } = require('./dom');
 
 // ---------------------------------------------------------------------------
 // CALENDAR NAVIGATION STATE  (module-scoped — only used by this file)
@@ -560,7 +560,7 @@ function renderLpSummary(spec) {
     const next = nextDivision(known[known.length - 1].lpAfter, typical.gain);
     const parts = [];
     if (inView.length) {
-        parts.push(`<span title="Sum of the LP changes over the ${inView.length} games your filters show${anyEstimate ? ', some of them estimated' : ''}">Net ` +
+        parts.push(`<span title="Sum of the LP changes over the ${formatInt(inView.length)} games your filters show${anyEstimate ? ', some of them estimated' : ''}">Net ` +
             `<b class="${net > 0 ? 'lp-up' : net < 0 ? 'lp-down' : ''}">${anyEstimate ? '~' : ''}${signed(net)} LP</b></span>`);
     }
     if (next) {

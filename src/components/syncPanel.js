@@ -14,6 +14,7 @@ const {
     attachLpReadingsToMatches
 } = require('../services/matchService');
 const { loadConfig } = require('../services/config');
+const { formatInt } = require('./dom');
 const { friendlyRiotError, rateLimitWaitSeconds } = require('../services/riotErrors');
 
 // Only after a 429 the rate limiter couldn't absorb (#75): every call goes
@@ -87,7 +88,7 @@ function updateProgress(current, total, stats) {
 
     container.classList.add('visible');
     fill.style.width  = (total > 0 ? (current / total) * 100 : 0) + '%';
-    count.textContent = `${current} / ${total}`;
+    count.textContent = `${formatInt(current)} / ${formatInt(total)}`;
 
     if (stats && details) {
         details.style.display = 'block';
@@ -179,13 +180,13 @@ window.handleSync = async function (options = {}) {
         hideProgress();
 
         const backfillResult = await backfillTimelines((current, total) => {
-            updateStatus('loading', 'Fetching Timelines', `${current}/${total} match timelines...`);
+            updateStatus('loading', 'Fetching Timelines', `${formatInt(current)}/${formatInt(total)} match timelines...`);
             updateProgress(current, total);
         });
         hideProgress();
 
         const advancedResult = await backfillAdvancedStats((current, total) => {
-            updateStatus('loading', 'Computing Advanced Stats', `${current}/${total} matches...`);
+            updateStatus('loading', 'Computing Advanced Stats', `${formatInt(current)}/${formatInt(total)} matches...`);
             updateProgress(current, total);
         });
         hideProgress();
@@ -193,7 +194,7 @@ window.handleSync = async function (options = {}) {
         // Fill the precomputed analytics columns for any match that predates
         // them. Once done, the analytics tabs never touch the JSON blobs.
         const computedResult = await backfillComputedStats((current, total) => {
-            updateStatus('loading', 'Preparing Analytics', `${current}/${total} matches...`);
+            updateStatus('loading', 'Preparing Analytics', `${formatInt(current)}/${formatInt(total)} matches...`);
             updateProgress(current, total);
         });
         hideProgress();
@@ -201,22 +202,22 @@ window.handleSync = async function (options = {}) {
         // Reload match history (skip rank fetch — already done above)
         await window.loadMatchHistory(true);
 
-        const advancedMsg = advancedResult.total  > 0 ? `, ${advancedResult.updated} stats computed`   : '';
-        const computedMsg = computedResult.total  > 0 ? `, ${computedResult.done} matches indexed`     : '';
-        const timelineMsg = backfillResult.total   > 0 ? `, ${backfillResult.updated} timelines added`  : '';
+        const advancedMsg = advancedResult.total  > 0 ? `, ${formatInt(advancedResult.updated)} stats computed`   : '';
+        const computedMsg = computedResult.total  > 0 ? `, ${formatInt(computedResult.done)} matches indexed`     : '';
+        const timelineMsg = backfillResult.total   > 0 ? `, ${formatInt(backfillResult.updated)} timelines added`  : '';
         if (auto) {
             // Quieter wording — this one ran on its own, off the back of a
             // game the user just played.
             updateStatus('success', 'Game Logged',
                 result.newMatches > 0
-                    ? `${result.newMatches} new match added to your history`
+                    ? `${formatInt(result.newMatches)} new match added to your history`
                     : 'No new match found yet — it may still be publishing');
         } else if (gaps) {
             updateStatus('success', 'Gaps Filled', result.missing > 0
-                ? `${result.missing} missing games found, ${result.newMatches} added${timelineMsg}${advancedMsg}${computedMsg}`
+                ? `${result.missing} missing games found, ${formatInt(result.newMatches)} added${timelineMsg}${advancedMsg}${computedMsg}`
                 : `Nothing missing: all ${result.listed} games since the season started are stored`);
         } else {
-            updateStatus('success', 'Sync Complete', `${result.newMatches} new matches added${timelineMsg}${advancedMsg}${computedMsg}`);
+            updateStatus('success', 'Sync Complete', `${formatInt(result.newMatches)} new matches added${timelineMsg}${advancedMsg}${computedMsg}`);
         }
 
         // Every sync — manual click or the post-game auto-sync — is also a

@@ -36,4 +36,15 @@ function escapeAttr(value) {
     return str;
 }
 
-module.exports = { escapeHtml, escapeAttr };
+/**
+ * A whole number with thousands separators: 1234.6 → "1,235", -2500 → "-2,500".
+ * `signed` adds "+" to positive numbers. Non-numbers pass through as given.
+ */
+function formatInt(value, { signed = false } = {}) {
+    const n = Number(value);
+    if (value === null || value === undefined || value === '' || !Number.isFinite(n)) return value == null ? '' : String(value);
+    const s = Math.round(n).toLocaleString('en-US');
+    return signed && Math.round(n) > 0 ? '+' + s : s;
+}
+
+module.exports = { escapeHtml, escapeAttr, formatInt };

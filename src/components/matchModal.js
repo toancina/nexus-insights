@@ -9,7 +9,7 @@
 const { getMatchById }   = require('../services/matchService');
 const { itemImg } = require('./itemIcon');
 const { evaluateBadges } = require('./badgeEvaluator');
-const { escapeHtml }     = require('./dom');
+const { escapeHtml, formatInt }     = require('./dom');
 const { computeTeamImpact, IMPACT_AREAS } = require('../services/teamImpact');
 const { renderMatchTimeline } = require('./matchTimelineChart');
 const { renderGameReport } = require('./gameReportPanel');
@@ -31,8 +31,7 @@ const badgeCache = new Map();
 
 function formatDiff(val) {
     if (val === null || val === undefined) return '-';
-    const num = parseInt(val);
-    return num > 0 ? '+' + num : num.toString();
+    return formatInt(parseInt(val), { signed: true });
 }
 
 function getDiffColor(val) {

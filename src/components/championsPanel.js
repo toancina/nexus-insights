@@ -14,7 +14,7 @@ const { championTable, championDetail, sortRows, roleLabel } = require('../servi
 const { itemImg } = require('./itemIcon');
 const { getItemData, getRuneData } = require('../services/dataDragon');
 const { getChampionIcon, RUNE_ICONS } = require('./matchCard');
-const { escapeHtml } = require('./dom');
+const { escapeHtml, formatInt } = require('./dom');
 const { wrTextColor, LOW_SAMPLE } = require('./winRateColor');
 const { decodePurchases, buildOrderTable, firstBackStats, firstBackAt } = require('../services/itemBuild');
 const { formatClock } = require('../services/matchTimeline');
@@ -195,7 +195,7 @@ function renderBuildOrder(matches, champion, role) {
 
     return `
         <div class="ch-card ch-card--wide">
-            <div class="ch-card-title">Build order <span>${games.length} games with a timeline · numbered items are finished items you kept, boots left out · under 5% of games hidden</span></div>
+            <div class="ch-card-title">Build order <span>${formatInt(games.length)} games with a timeline · numbered items are finished items you kept, boots left out · under 5% of games hidden</span></div>
             <div class="ch-build-grid">${cols.map(col).join('')}</div>
             ${back}
         </div>`;
@@ -264,7 +264,7 @@ function renderDetail(matches) {
             ${champIcon(d.champion, 'ch-icon ch-icon--lg')}
             <div class="ch-detail-title">
                 <h3>${escapeHtml(d.champion)}</h3>
-                <div class="ch-detail-sub">${s.games} games · ${s.wins}W ${s.losses}L · KDA ${num(s.kda, 2)} ·
+                <div class="ch-detail-sub">${formatInt(s.games)} games · ${s.wins}W ${s.losses}L · KDA ${num(s.kda, 2)} ·
                     CS/min ${num(s.csPerMin)} · Impact ${rank(s.impactRank)}</div>
             </div>
             <div class="ch-detail-wr" style="color:${wrTextColor(s.winRate)}">${pct(s.winRate)}<span>win rate</span></div>

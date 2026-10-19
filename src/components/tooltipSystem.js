@@ -5,7 +5,7 @@
 
 const { getItemData, getRuneData, getSummonerSpellData } = require('../services/dataDragon');
 const { itemDescriptionHtml } = require('./itemDescription');
-const { escapeHtml } = require('./dom');
+const { escapeHtml, formatInt } = require('./dom');
 
 function tooltip() {
     return document.getElementById('gameTooltip');
@@ -41,8 +41,8 @@ function showItemTooltip(itemId, boughtAt) {
     const totalCost = Number(itemData.gold?.total) || 0;
     const baseCost  = Number(itemData.gold?.base)  || 0;
     const costText  = baseCost > 0
-        ? `<span class="item-cost">Cost: <span class="gold-value">${totalCost}</span> (<span class="gold-value">${baseCost}</span>)</span>`
-        : `<span class="item-cost">Cost: <span class="gold-value">${totalCost}</span></span>`;
+        ? `<span class="item-cost">Cost: <span class="gold-value">${formatInt(totalCost)}</span> (<span class="gold-value">${formatInt(baseCost)}</span>)</span>`
+        : `<span class="item-cost">Cost: <span class="gold-value">${formatInt(totalCost)}</span></span>`;
 
     // Escaped, with only Riot's known tags turned back into markup (#37)
     const description = itemDescriptionHtml(itemData.description);

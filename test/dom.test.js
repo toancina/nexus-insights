@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { escapeHtml, escapeAttr } = require('../src/components/dom');
+const { escapeHtml, escapeAttr, formatInt } = require('../src/components/dom');
 
 test('escapes the characters that break out of markup', () => {
     assert.equal(escapeHtml('<script>'), '&lt;script&gt;');
@@ -33,4 +33,15 @@ test('escapeAttr strips dangerous URL schemes', () => {
     assert.equal(escapeAttr('  JavaScript:alert(1)'), '');
     assert.equal(escapeAttr('data:text/html,<h1>x'), '');
     assert.ok(escapeAttr('https://ddragon.leagueoflegends.com/x.png').startsWith('https://'));
+});
+
+test('formatInt adds thousands separators and rounds', () => {
+    assert.equal(formatInt(1234), '1,234');
+    assert.equal(formatInt(1234567.6), '1,234,568');
+    assert.equal(formatInt(999), '999');
+    assert.equal(formatInt(-2500), '-2,500');
+    assert.equal(formatInt(1500, { signed: true }), '+1,500');
+    assert.equal(formatInt(0, { signed: true }), '0');
+    assert.equal(formatInt(null), '');
+    assert.equal(formatInt('-'), '-');
 });
