@@ -17,7 +17,7 @@ const { getChampionIcon, RUNE_ICONS } = require('./matchCard');
 const { escapeHtml, formatInt } = require('./dom');
 const { wrTextColor, LOW_SAMPLE } = require('./winRateColor');
 const { decodePurchases, buildOrderTable, firstBackStats, firstBackAt } = require('../services/itemBuild');
-const { itemWpa, winChancePoints } = require('../services/itemWpa');
+const { itemWpa, winChancePoints, formatWpa } = require('../services/itemWpa');
 const { formatClock } = require('../services/matchTimeline');
 
 const COLUMNS = [
@@ -180,7 +180,7 @@ function renderBuildOrder(matches, champion, role) {
     const icons = key => String(key).split('+').map(id => itemIcon(Number(id))).join('');
     const names = key => String(key).split('+').map(id => itemName(Number(id))).join(' + ');
     // Average WPA (#89): "–" until LOW_SAMPLE of the row's games have a win-chance curve
-    const wpaText = r => (r.wpaGames >= LOW_SAMPLE ? `${r.wpa > 0 ? '+' : r.wpa < 0 ? '\u2212' : ''}${Math.abs(r.wpa).toFixed(1)}` : '–');
+    const wpaText = r => (r.wpaGames >= LOW_SAMPLE ? formatWpa(r.wpa) : '–');
     const wpaCell = r => {
         const color = r.wpaGames < LOW_SAMPLE || Math.abs(r.wpa) < 0.05 ? '' : r.wpa > 0 ? 'var(--success)' : 'var(--error)';
         return `<span class="ch-build-wpa"${color ? ` style="color:${color}"` : ''}>${wpaText(r)}</span>`;

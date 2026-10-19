@@ -14,7 +14,7 @@
  * the item, not what the item caused.
  */
 
-const { FIRST_BACK_WINDOW_MS } = require('./itemBuild');
+const { FIRST_BACK_WINDOW_MS, encodePurchases, decodePurchases } = require('./itemBuild');
 
 const TRIP_GAP_MS   = FIRST_BACK_WINDOW_MS;   // same 60 s the "First back" row uses
 const WINDOW_CAP_MS = 5 * 60 * 1000;
@@ -52,6 +52,18 @@ function winChancePoints(text, gameDurationSec) {
 /** A full teamSeries (expanded rows) → [{t, p}] in percent. */
 function seriesPoints(series) {
     return (series || []).map(s => ({ t: s.t, p: s.winProb * 100 }));
+}
+
+/**
+ * Full-timeline purchases and win chance, rounded the way the stored columns
+ * are (seconds, whole %), so an expanded row's tooltip gives the same numbers
+ * as the match row's for the same game.
+ */
+function asStored(purchases, series, gameDurationSec) {
+    return {
+        purchases: decodePurchases(encodePurchases(purchases)),
+        points: winChancePoints(encodeWinChance(series), gameDurationSec),
+    };
 }
 
 /** Win chance (%) at `t`, linear between frames, held at both ends; null with no points. */
@@ -94,6 +106,12 @@ function lastPurchaseWpa(purchases, points) {
     return out;
 }
 
+/** An average WPA for display: "+3.1", "\u22120.3", "0.0" (sign from the rounded value). */
+function formatWpa(value) {
+    const v = Math.round(value * 10) / 10;
+    return `${v > 0 ? '+' : v < 0 ? '\u2212' : ''}${Math.abs(v).toFixed(1)}`;
+}
+
 /** Tooltip line: "Win chance 46% → 58% (+12) until your next trip to the shop". */
 function wpaLine(from, to) {
     const d = to - from;
@@ -103,6 +121,6 @@ function wpaLine(from, to) {
 
 module.exports = {
     TRIP_GAP_MS, WINDOW_CAP_MS,
-    encodeWinChance, decodeWinChance, winChancePoints, seriesPoints, chanceAt,
-    itemWpa, lastPurchaseWpa, wpaLine,
+    encodeWinChance, decodeWinChance, winChancePoints, seriesPoints, asStored, chanceAt,
+    itemWpa, lastPurchaseWpa, formatWpa, wpaLine,
 };

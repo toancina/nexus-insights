@@ -15,7 +15,7 @@ const { renderMatchTimeline } = require('./matchTimelineChart');
 const { renderGameReport } = require('./gameReportPanel');
 const { purchasesFromTimeline, lastBoughtAt } = require('../services/itemBuild');
 const { formatClock, teamSeries } = require('../services/matchTimeline');
-const { lastPurchaseWpa, seriesPoints } = require('../services/itemWpa');
+const { lastPurchaseWpa, asStored } = require('../services/itemWpa');
 const {
     RUNE_ICONS,
     getChampionIcon,
@@ -135,8 +135,8 @@ function buildTeamData(match) {
         const impact = computeTeamImpact(participants);
 
         // Each team's win chance, for the WPA line in item tooltips (#89)
-        const winChanceOf = timeline
-            ? { 100: seriesPoints(teamSeries(matchData, timeline, 100)), 200: seriesPoints(teamSeries(matchData, timeline, 200)) }
+        const seriesOf = timeline
+            ? { 100: teamSeries(matchData, timeline, 100), 200: teamSeries(matchData, timeline, 200) }
             : null;
 
         // Build position map for lane-opponent lookups
@@ -145,6 +145,12 @@ function buildTeamData(match) {
             const pos = p.teamPosition || p.lane || '';
             positionMap[`${p.teamId}-${pos}`] = { participantId: p.participantId || (idx + 1), ...p };
         });
+
+        // Rounded like the stored columns, so it matches the match row's tooltip
+        const wpaFor = (purchases, teamId) => {
+            const s = asStored(purchases, seriesOf[teamId] || [], matchData.info?.gameDuration);
+            return lastPurchaseWpa(s.purchases, s.points);
+        };
 
         participants.forEach((p, idx) => {
             const participantId = p.participantId || (idx + 1);
@@ -172,6 +178,9 @@ function buildTeamData(match) {
                 (p.needVisionPings||0) + (p.onMyWayPings||0) + (p.pushPings||0) +
                 (p.visionClearedPings||0);
 
+            // Purchases once per player: "Bought at" and the WPA line (#7, #89)
+            const purchases = timeline ? purchasesFromTimeline(timeline, participantId) : null;
+
             const dmgGoldRatio = p.goldEarned > 0
                 ? (p.totalDamageDealtToChampions / p.goldEarned).toFixed(2)
                 : '0.00';
@@ -193,8 +202,8 @@ function buildTeamData(match) {
                 towerDamage:       p.damageDealtToTurrets || 0,
                 isCurrentPlayer:   p.championName === match.championName && p.teamId === match.teamId,
                 impact:            impact.get(participantId) || null,
-                boughtAt:          timeline ? lastBoughtAt(purchasesFromTimeline(timeline, participantId)) : null,
-                wpaAt:             winChanceOf ? lastPurchaseWpa(purchasesFromTimeline(timeline, participantId), winChanceOf[p.teamId] || []) : null
+                boughtAt:          purchases ? lastBoughtAt(purchases) : null,
+                wpaAt:             purchases ? wpaFor(purchases, p.teamId) : null
             };
 
             if (p.teamId === 100) teamData.team100.push(playerData);

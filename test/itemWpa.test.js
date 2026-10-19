@@ -109,3 +109,21 @@ test('the window constants', () => {
     assert.equal(W.TRIP_GAP_MS, 60000);
     assert.equal(W.WINDOW_CAP_MS, 5 * 60000);
 });
+
+test('asStored rounds like the stored columns, so both tooltips agree', () => {
+    const { encodePurchases, decodePurchases } = require(path.join(SRC, 'services', 'itemBuild.js'));
+    // 870.6 s and 930.5 s are 59.9 s apart (same trip) but 60 s apart once rounded to seconds
+    const purchases = [{ itemId: 1026, t: 870600 }, { itemId: 2055, t: 930500 }, { itemId: 3006, t: 1100000 }];
+    const series = Array.from({ length: 31 }, (_, m) => ({ t: m * MIN + 400, winProb: 0.3 + m * 0.0137 }));
+    const stored = W.lastPurchaseWpa(decodePurchases(encodePurchases(purchases)), W.winChancePoints(W.encodeWinChance(series), 1830));
+    const s = W.asStored(purchases, series, 1830);
+    assert.deepEqual(W.lastPurchaseWpa(s.purchases, s.points), stored);
+});
+
+test('formatWpa: sign from the rounded value, never "-0.0"', () => {
+    assert.equal(W.formatWpa(3.14), '+3.1');
+    assert.equal(W.formatWpa(-0.34), '−0.3');
+    assert.equal(W.formatWpa(-0.04), '0.0');
+    assert.equal(W.formatWpa(0.04), '0.0');
+    assert.equal(W.formatWpa(0), '0.0');
+});
