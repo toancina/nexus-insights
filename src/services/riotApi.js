@@ -74,9 +74,29 @@ function riotGet(url, { params, label, timeout = 15000, apiKey: keyOverride = nu
             params,
             timeout,
             headers: { 'X-Riot-Token': apiKey },
-        }),
+        }).catch(err => { throw scrubKey(err); }),
         { label, retries }
     ).then(res => res.data);
+}
+
+/**
+ * Take the API key out of a failed call's error before anyone sees it. An
+ * axios error carries the request config (headers included) and the raw
+ * request, whose header text holds the key, so logging the whole error, or
+ * expanding it in DevTools, showed the key. Status, Riot's reply and the
+ * response headers (Retry-After, rate-limit type) are kept.
+ */
+function scrubKey(err) {
+    if (!err || typeof err !== 'object') return err;
+    for (const cfg of [err.config, err.response && err.response.config]) {
+        const h = cfg && cfg.headers;
+        if (!h) continue;
+        if (typeof h.set === 'function') h.set('X-Riot-Token', '[redacted]');
+        else h['X-Riot-Token'] = '[redacted]';
+    }
+    delete err.request;
+    if (err.response) delete err.response.request;
+    return err;
 }
 
 // Fetch ALL match IDs with pagination support.
@@ -269,6 +289,6 @@ module.exports = {
     getMatchIds, getMatchData, getMatchTimeline,
     getPuuidByRiotId, getSummonerByPuuid, getLeagueByPuuid,
     getChampionMastery, getRecentMatchIds,
-    limiter,
+    limiter, scrubKey,
     PLATFORM_ROUTING, routingFor, accountRoutingFor,
 };
