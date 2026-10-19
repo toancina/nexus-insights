@@ -5450,6 +5450,19 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     font-variant-numeric: tabular-nums;
 }
 
+/* Average WPA per build row (#89) */
+.ch-build-wpa {
+    min-width: 34px;
+    margin-left: auto;
+    text-align: right;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.ch-wpa-note {
+    margin: 2px 0 8px;
+}
+
 /* "Bought at 14:32" in the item tooltip (#7) */
 .item-bought {
     color: var(--accent-primary);

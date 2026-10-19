@@ -17,6 +17,7 @@ const { getChampionIcon, RUNE_ICONS } = require('./matchCard');
 const { escapeHtml, formatInt } = require('./dom');
 const { wrTextColor, LOW_SAMPLE } = require('./winRateColor');
 const { decodePurchases, buildOrderTable, firstBackStats, firstBackAt } = require('../services/itemBuild');
+const { itemWpa, winChancePoints } = require('../services/itemWpa');
 const { formatClock } = require('../services/matchTimeline');
 
 const COLUMNS = [
@@ -166,6 +167,7 @@ function renderBuildOrder(matches, champion, role) {
             return {
                 purchases, win: m.win === 1, firstBackAt: firstBackAt(purchases),
                 finalItems: [m.item0, m.item1, m.item2, m.item3, m.item4, m.item5],
+                wpa: itemWpa(purchases, winChancePoints(m.winChance, m.gameDuration)),   // #89
             };
         });
     if (!games.length) {
@@ -177,13 +179,20 @@ function renderBuildOrder(matches, champion, role) {
     const cols = [['Start', t.start], ['First back', t.firstBack], ['1st item', t.core[0]], ['2nd item', t.core[1]], ['3rd item', t.core[2]]];
     const icons = key => String(key).split('+').map(id => itemIcon(Number(id))).join('');
     const names = key => String(key).split('+').map(id => itemName(Number(id))).join(' + ');
+    // Average WPA (#89): "–" until LOW_SAMPLE of the row's games have a win-chance curve
+    const wpaText = r => (r.wpaGames >= LOW_SAMPLE ? `${r.wpa > 0 ? '+' : r.wpa < 0 ? '\u2212' : ''}${Math.abs(r.wpa).toFixed(1)}` : '–');
+    const wpaCell = r => {
+        const color = r.wpaGames < LOW_SAMPLE || Math.abs(r.wpa) < 0.05 ? '' : r.wpa > 0 ? 'var(--success)' : 'var(--error)';
+        return `<span class="ch-build-wpa"${color ? ` style="color:${color}"` : ''}>${wpaText(r)}</span>`;
+    };
+    const wpaTitle = r => (r.wpaGames >= LOW_SAMPLE ? ` · WPA ${wpaText(r)} over ${r.wpaGames} games` : '');
     const col = ([label, rows]) => `
         <div class="ch-build-col">
             <div class="ch-build-head">${label}</div>
             ${rows.slice(0, 3).map(r => `
-                <div class="ch-build-row${r.games < LOW_SAMPLE ? ' is-low' : ''}" title="${escapeHtml(names(r.key))}: ${r.wins}W ${r.games - r.wins}L, in ${pct(r.pickRate)} of games">
+                <div class="ch-build-row${r.games < LOW_SAMPLE ? ' is-low' : ''}" title="${escapeHtml(names(r.key))}: ${r.wins}W ${r.games - r.wins}L, in ${pct(r.pickRate)} of games${wpaTitle(r)}">
                     <span class="ch-build-icons">${icons(r.key)}</span>
-                    <span class="ch-build-n">${r.games}</span>${wrCell(r.winRate, r.games)}
+                    <span class="ch-build-n">${r.games}</span>${wrCell(r.winRate, r.games)}${wpaCell(r)}
                 </div>`).join('') || '<div class="ch-empty">–</div>'}
         </div>`;
 
@@ -196,6 +205,7 @@ function renderBuildOrder(matches, champion, role) {
     return `
         <div class="ch-card ch-card--wide">
             <div class="ch-card-title">Build order <span>${formatInt(games.length)} games with a timeline · numbered items are finished items you kept, boots left out · under 5% of games hidden</span></div>
+            <div class="ch-note ch-wpa-note">Last number: <b>WPA</b>, the average change in your team's estimated win chance from the purchase until your next trip to the shop (at most 5 min). It shows how games went while you had the item, not what the item caused.</div>
             <div class="ch-build-grid">${cols.map(col).join('')}</div>
             ${back}
         </div>`;

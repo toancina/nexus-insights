@@ -95,3 +95,31 @@ test('first back stats: median, and win rate when earlier vs later', () => {
     assert.deepEqual([s.slower.games, s.slower.wins], [3, 1]);
     assert.equal(B.firstBackStats([]).medianMs, null);
 });
+
+// #89: average WPA per build-order row
+const withWpa = (purchases, vals) => purchases.map((p, i) => ({ ...p, from: 50, to: 50 + vals[i], wpa: vals[i] }));
+const BUILD = [{ itemId: 1055, t: 1 * S }, { itemId: 2003, t: 2 * S }, { itemId: 1036, t: 370 * S },
+               { itemId: 1001, t: 380 * S }, { itemId: 6672, t: 600 * S }];
+
+test('rows average WPA of that purchase', () => {
+    const t = B.buildOrderTable([
+        { win: true,  finalItems: [6672], purchases: BUILD, wpa: withWpa(BUILD, [4, 4, 2, 3, 6]) },
+        { win: false, finalItems: [6672], purchases: BUILD, wpa: withWpa(BUILD, [-2, -2, 0, -1, -4]) },
+    ]);
+    const row = (rows, key) => rows.find(r => r.key === key);
+    assert.deepEqual([row(t.start, '1055+2003').wpa, row(t.start, '1055+2003').wpaGames], [1, 2]);   // the trip's first purchase
+    assert.equal(row(t.firstBack, 1036).wpa, 1);
+    assert.equal(row(t.firstBack, 1001).wpa, 1);
+    assert.deepEqual([row(t.core[0], 6672).wpa, row(t.core[0], 6672).wpaGames], [1, 2]);
+});
+
+test('rows ignore games without WPA', () => {
+    const t = B.buildOrderTable([
+        { win: true, finalItems: [6672], purchases: BUILD },
+        { win: true, finalItems: [6672], purchases: BUILD, wpa: BUILD.map(() => null) },
+        { win: true, finalItems: [6672], purchases: BUILD, wpa: withWpa(BUILD, [1, 1, 1, 1, 3]) },
+    ]);
+    assert.deepEqual([t.core[0][0].games, t.core[0][0].wpa, t.core[0][0].wpaGames], [3, 3, 1]);
+    const none = B.buildOrderTable([{ win: true, finalItems: [6672], purchases: BUILD }]);
+    assert.deepEqual([none.core[0][0].wpa, none.core[0][0].wpaGames], [null, 0]);
+});

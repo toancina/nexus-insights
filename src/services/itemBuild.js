@@ -93,7 +93,11 @@ function buildPositions(purchases, finalItems = [], { isExcluded = () => false, 
     return { start, firstBack, core };
 }
 
-function rateRows(games, keysOf) {
+/**
+ * Rows of games / wins / win rate / pick rate per key. With `valueOf(game, key)`
+ * each row also averages that number (WPA, #89) over the games that have one.
+ */
+function rateRows(games, keysOf, valueOf = null) {
     const counts = new Map();
     let withData = 0;
     for (const g of games) {
@@ -101,30 +105,41 @@ function rateRows(games, keysOf) {
         if (!keys.length) continue;
         withData++;
         for (const k of keys) {
-            const c = counts.get(k) || { key: k, games: 0, wins: 0 };
+            const c = counts.get(k) || { key: k, games: 0, wins: 0, wpaSum: 0, wpaGames: 0 };
             c.games++;
             if (g.win) c.wins++;
+            const v = valueOf ? valueOf(g, k) : null;
+            if (Number.isFinite(v)) { c.wpaSum += v; c.wpaGames++; }
             counts.set(k, c);
         }
     }
     return [...counts.values()]
-        .map(c => ({ ...c, winRate: c.wins / c.games, pickRate: withData ? c.games / withData : 0 }))
+        .map(({ wpaSum, ...c }) => ({
+            ...c, winRate: c.wins / c.games, pickRate: withData ? c.games / withData : 0,
+            wpa: c.wpaGames ? wpaSum / c.wpaGames : null,
+        }))
         .filter(c => c.pickRate >= MIN_PICK_RATE)
         .sort((a, b) => b.games - a.games);
 }
 
 /**
  * Build-order table for a set of games (usually one champion).
- * @param {Array<{purchases, finalItems, win}>} games  only games that have purchases
+ * @param {Array<{purchases, finalItems, win, wpa?}>} games  only games that have purchases;
+ *        `wpa` (itemWpa.js, aligned with purchases) adds an average WPA to every row
  * @returns {{ start, firstBack, core: [rows for 1st, 2nd, 3rd item] }}
  *          start rows are item combinations: key "1055+2003"
  */
 function buildOrderTable(games, opts = {}) {
-    const positions = games.map(g => ({ win: g.win, pos: buildPositions(g.purchases, g.finalItems, opts) }));
+    const positions = games.map(g => ({ win: g.win, wpa: g.wpa || [], pos: buildPositions(g.purchases, g.finalItems, opts) }));
+    // WPA of the opening shop: its first purchase. Of an item later on: its
+    // first purchase after the opening shop, the one the row is about.
+    const firstWpa = (g, test) => { const w = g.wpa.find(e => e && test(e)); return w ? w.wpa : null; };
+    const startWpa = g => firstWpa(g, e => e.t <= STARTING_CUTOFF_MS);
+    const itemWpaOf = (g, id) => firstWpa(g, e => e.itemId === id && e.t > STARTING_CUTOFF_MS);
     return {
-        start: rateRows(positions, g => (g.pos.start.length ? [[...g.pos.start].sort((a, b) => a - b).join('+')] : [])),
-        firstBack: rateRows(positions, g => (g.pos.firstBack ? g.pos.firstBack.items : [])),
-        core: [0, 1, 2].map(i => rateRows(positions, g => (g.pos.core[i] ? [g.pos.core[i]] : []))),
+        start: rateRows(positions, g => (g.pos.start.length ? [[...g.pos.start].sort((a, b) => a - b).join('+')] : []), startWpa),
+        firstBack: rateRows(positions, g => (g.pos.firstBack ? g.pos.firstBack.items : []), itemWpaOf),
+        core: [0, 1, 2].map(i => rateRows(positions, g => (g.pos.core[i] ? [g.pos.core[i]] : []), itemWpaOf)),
     };
 }
 
