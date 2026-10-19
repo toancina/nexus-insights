@@ -4,6 +4,7 @@
 const { escapeHtml } = require('./dom');
 const { itemImg } = require('./itemIcon');
 const { decodePurchases, lastBoughtAt } = require('../services/itemBuild');
+const { lastPurchaseWpa, winChancePoints } = require('../services/itemWpa');
 const { formatClock } = require('../services/matchTimeline');
 
 function getPositionIcon(teamPosition) {
@@ -125,10 +126,15 @@ function renderMatchRow(match, index, DDRAGON_BASE, QUEUE_NAMES, getChampionIcon
     // Build items HTML for table display in 2 rows (smaller icons)
     const items = [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6];
     // "Bought at" in the item tooltip, from the stored purchases (#7)
-    const bought = lastBoughtAt(decodePurchases(match.itemPurchases));
+    const purchases = decodePurchases(match.itemPurchases);
+    const bought = lastBoughtAt(purchases);
+    // …and how your team's win chance moved after that purchase (#89)
+    const wpaAt = lastPurchaseWpa(purchases, winChancePoints(match.winChance, match.gameDuration));
     const itemSlot = itemId => {
         if (itemId && itemId > 0) {
-            const at = bought.has(itemId) ? ` data-bought="${formatClock(bought.get(itemId))}"` : '';
+            const w = wpaAt.get(itemId);
+            const at = (bought.has(itemId) ? ` data-bought="${formatClock(bought.get(itemId))}"` : '')
+                + (w ? ` data-wpa="${w.from},${w.to}"` : '');
             return `<div class="table-item-slot has-item">${itemImg(itemId, { patch: match.patch, extra: at })}</div>`;
         }
         return `<div class="table-item-slot"></div>`;

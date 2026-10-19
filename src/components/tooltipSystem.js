@@ -6,6 +6,7 @@
 const { getItemData, getRuneData, getSummonerSpellData } = require('../services/dataDragon');
 const { itemDescriptionHtml } = require('./itemDescription');
 const { escapeHtml, formatInt } = require('./dom');
+const { wpaLine } = require('../services/itemWpa');
 
 function tooltip() {
     return document.getElementById('gameTooltip');
@@ -30,7 +31,7 @@ function hideTooltip() {
 // TOOLTIP CONTENT BUILDERS
 // ---------------------------------------------------------------------------
 
-function showItemTooltip(itemId, boughtAt) {
+function showItemTooltip(itemId, boughtAt, wpa) {
     const itemData = getItemData(itemId);
     if (!itemData) return;
 
@@ -49,7 +50,10 @@ function showItemTooltip(itemId, boughtAt) {
 
     // "Bought at 14:32" from the match timeline (#7); only digits and ':' get here
     const bought = /^\d+:\d\d$/.test(boughtAt || '') ? `<br><span class="item-bought">Bought at ${boughtAt}</span>` : '';
-    title.innerHTML = `${escapeHtml(itemData.name || 'Unknown Item')}<br>${costText}${bought}`;
+    // "Win chance 46% → 58% (+12) …" for that purchase (#89); data-wpa is "from,to"
+    const fromTo = /^(\d{1,3}),(\d{1,3})$/.exec(wpa || '');
+    const change = fromTo ? `<br><span class="item-wpa">${escapeHtml(wpaLine(Number(fromTo[1]), Number(fromTo[2])))}</span>` : '';
+    title.innerHTML = `${escapeHtml(itemData.name || 'Unknown Item')}<br>${costText}${bought}${change}`;
     desc.innerHTML  = description;
     el.style.display = 'block';
 }
@@ -103,7 +107,7 @@ function showColumnTooltip(labelEl) {
 // ---------------------------------------------------------------------------
 
 function handleTooltipShow(e) {
-    if (e.target.dataset?.itemId)         { showItemTooltip(e.target.dataset.itemId, e.target.dataset.bought); return; }
+    if (e.target.dataset?.itemId)         { showItemTooltip(e.target.dataset.itemId, e.target.dataset.bought, e.target.dataset.wpa); return; }
     if (e.target.dataset?.runeId)         { showRuneTooltip(parseInt(e.target.dataset.runeId));             return; }
     if (e.target.dataset?.spellId)        { showSummonerSpellTooltip(parseInt(e.target.dataset.spellId));   return; }
     const badgeEl = e.target.closest('.badge-pill');

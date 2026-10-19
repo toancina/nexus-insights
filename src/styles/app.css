@@ -5413,7 +5413,7 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
 .ch-build-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 10px;
+    gap: 10px 16px;
     margin-top: 6px;
 }
 
@@ -5450,13 +5450,19 @@ body.window-maximized .titlebar-btn .icon-restore  { display: block; }
     font-variant-numeric: tabular-nums;
 }
 
+/* "Win chance 46% → 58% (+12) …" in the item tooltip (#89) */
+.item-wpa {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+}
+
 /* Average WPA per build row (#89) */
 .ch-build-wpa {
-    min-width: 34px;
-    margin-left: auto;
-    text-align: right;
     color: var(--text-tertiary);
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .ch-wpa-note {

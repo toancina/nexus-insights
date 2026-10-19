@@ -14,7 +14,8 @@ const { computeTeamImpact, IMPACT_AREAS } = require('../services/teamImpact');
 const { renderMatchTimeline } = require('./matchTimelineChart');
 const { renderGameReport } = require('./gameReportPanel');
 const { purchasesFromTimeline, lastBoughtAt } = require('../services/itemBuild');
-const { formatClock } = require('../services/matchTimeline');
+const { formatClock, teamSeries } = require('../services/matchTimeline');
+const { lastPurchaseWpa, seriesPoints } = require('../services/itemWpa');
 const {
     RUNE_ICONS,
     getChampionIcon,
@@ -61,7 +62,8 @@ function renderPlayerRow(player, gameDuration, patch) {
     const DDRAGON   = window.DDRAGON_BASE;
 
     // "Bought at" in the item tooltip (#7)
-    const at = id => (player.boughtAt && player.boughtAt.has(id) ? ` data-bought="${formatClock(player.boughtAt.get(id))}"` : '');
+    const at = id => (player.boughtAt && player.boughtAt.has(id) ? ` data-bought="${formatClock(player.boughtAt.get(id))}"` : '')
+        + (player.wpaAt && player.wpaAt.has(id) ? ` data-wpa="${player.wpaAt.get(id).from},${player.wpaAt.get(id).to}"` : '');   // #89
     const itemsTop    = player.items.slice(0, 3).map(id =>
         id && id > 0 ? itemImg(id, { patch, extra: `class="team-item-sm"${at(id)}` }) : `<div class="team-item-empty-sm"></div>`
     ).join('');
@@ -132,6 +134,11 @@ function buildTeamData(match) {
 
         const impact = computeTeamImpact(participants);
 
+        // Each team's win chance, for the WPA line in item tooltips (#89)
+        const winChanceOf = timeline
+            ? { 100: seriesPoints(teamSeries(matchData, timeline, 100)), 200: seriesPoints(teamSeries(matchData, timeline, 200)) }
+            : null;
+
         // Build position map for lane-opponent lookups
         const positionMap = {};
         participants.forEach((p, idx) => {
@@ -186,7 +193,8 @@ function buildTeamData(match) {
                 towerDamage:       p.damageDealtToTurrets || 0,
                 isCurrentPlayer:   p.championName === match.championName && p.teamId === match.teamId,
                 impact:            impact.get(participantId) || null,
-                boughtAt:          timeline ? lastBoughtAt(purchasesFromTimeline(timeline, participantId)) : null
+                boughtAt:          timeline ? lastBoughtAt(purchasesFromTimeline(timeline, participantId)) : null,
+                wpaAt:             winChanceOf ? lastPurchaseWpa(purchasesFromTimeline(timeline, participantId), winChanceOf[p.teamId] || []) : null
             };
 
             if (p.teamId === 100) teamData.team100.push(playerData);

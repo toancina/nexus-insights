@@ -107,6 +107,7 @@ src/
 │   ├── matchTimeline.js       # Timeline series + events (#3)
 │   ├── gameReport.js          # Game report numbers (#9)
 │   ├── itemBuild.js           # Item purchases + build order (#7)
+│   ├── itemWpa.js             # Item WPA: win-chance change after a purchase (#89)
 │   ├── deathMap.js            # Death positions, density, zones (#8)
 │   ├── laneGaps.js            # Per-minute lane gaps (#12)
 │   ├── lpAttribution.js / lpEstimate.js  # Per-game LP (#1) / LP estimates (#5)
@@ -739,7 +740,33 @@ build item `<img>` tags by hand elsewhere.
   Plus "First back: median 3:56 · 49% when earlier · 55% when later".
 - **Economy: Median First Back** card (m:ss). Not benchmarked, and no trend
   arrow: an earlier back isn't simply better.
-- Win-probability change per item (the optional #3 link) is not done.
+- Win-probability change per item: see "Item WPA (#89)" below.
+
+### Item WPA (2026-10, issue #89)
+
+WPA of a purchase = your team's estimated win chance (#3's formula) at the
+end of its window minus at the purchase, in percentage points.
+`services/itemWpa.js` (pure, tested).
+
+- **Window:** to your next trip to the shop (first purchase ≥ 60 s later,
+  `TRIP_GAP_MS` = `FIRST_BACK_WINDOW_MS`), at most 5 min (`WINDOW_CAP_MS`),
+  stopped at the last timeline frame; linear between frames. Not Lol Stats'
+  "next purchase of anything": that gave ~0 to everything bought on one trip,
+  and its last item ran to game end, i.e. measured the result.
+- **`winChance` column:** your team's win chance per frame, whole %
+  (`"50,52,…"`), written by `computeAdvancedStatsForMatch`; `''` = no
+  timeline, NULL = not computed (backfills pick it up), reset with
+  `laneGaps` when a timeline arrives later. Frame i is at i min except the
+  last, at game end (`winChancePoints`). WPA itself is computed when needed,
+  so the window rule can change without re-indexing.
+- **Build order card:** each row's last number is the average WPA of that
+  purchase (opening shop: its first purchase; other rows: that item's first
+  purchase after the opening shop), `–` until 5 of its games have a curve.
+- **Item tooltips:** "Win chance 46% → 58% (+12) until your next trip to the
+  shop" for the last purchase of that item (like "Bought at"): Match History
+  rows from the stored columns, expanded rows for all 10 players from the
+  full timeline (each player's own team). Passed as `data-wpa="from,to"`.
+- Descriptive, not causal: the whole team moves the win chance.
 
 ### Death map (2026-10, issue #8)
 
