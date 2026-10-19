@@ -444,19 +444,28 @@
 
             const areas = Progress.areaTrends(games, window.computeTabStats, 30, { all: trendsAll() });
 
+            // Wide windows: two columns, habits on the right (polish.css .coach-layout)
             container.innerHTML = `
-              ${renderHeader(games, reading, result.roleLabel)}
+              <div class="coach-layout">
+                <section class="coach-slot-rank">${renderHeader(games, reading, result.roleLabel)}</section>
 
-              <div class="coach-section-label">Game by game</div>
-              ${renderReport()}
+                <section class="coach-slot-report">
+                  <div class="coach-section-label">Game by game</div>
+                  ${renderReport()}
+                </section>
 
-              <div class="coach-section-label">Your habits <span class="coach-dim">— worst to best, from your last 10 games vs. the 10 before · click one for details</span></div>
-              <div id="coachBoard">${renderBoard(board, state.moves)}</div>
+                <aside class="coach-slot-habits">
+                  <div class="coach-section-label">Your habits <span class="coach-dim">— worst to best, last 10 games vs. the 10 before · click one for details</span></div>
+                  <div id="coachBoard">${renderBoard(board, state.moves)}</div>
+                </aside>
 
-              <div class="coach-section-label">Trends <span class="coach-dim">— last 10 games vs. the 10 before, or flip a switch for all your Solo/Duo games · click one to open it in Analytics</span></div>
-              <div id="coachTrends">${renderTrends(areas)}</div>
+                <section class="coach-slot-trends">
+                  <div class="coach-section-label">Trends <span class="coach-dim">— last 10 games vs. the 10 before, or flip a switch for all your Solo/Duo games · click one to open it in Analytics</span></div>
+                  <div id="coachTrends">${renderTrends(areas)}</div>
+                </section>
 
-              ${renderDetails(result)}`;
+                <section class="coach-slot-details">${renderDetails(result)}</section>
+              </div>`;
         } catch (err) {
             container.innerHTML = `<div class="coach-empty error">Error: ${escapeHtml(err.message)}</div>`;
             console.error('[CoachingPanel]', err);
