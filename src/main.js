@@ -232,10 +232,8 @@ function createWindow({ startHidden = false } = {}) {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    // Content tops out around ~1000px tall (Overview tab, calendar + charts
-    // + footer). Without a cap, maximizing on a tall monitor left a growing
-    // blank gap below the footer since nothing in the page fills that space.
-    maxHeight: 1100,
+    // No maximum size: pages scroll inside #pageScroll (#80) and the footer is
+    // gone, so a tall or maximised window just shows more of the page.
 
     // Taskbar / alt-tab icon. Frameless windows have no title bar to show it,
     // but Windows still uses it everywhere else.
