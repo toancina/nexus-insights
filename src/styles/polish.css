@@ -985,9 +985,9 @@ body.has-top-bar .champions-shell { padding-top: var(--gutter); }
 .coach-rank-title { font-size: 18px; margin: 0; }
 
 @media (min-width: 1400px) {
-    .coaching-shell { max-width: 1500px; }
+    .coaching-shell { max-width: 1840px; }
     .coach-layout {
-        grid-template-columns: minmax(0, 1fr) 360px;
+        grid-template-columns: minmax(0, 1fr) 400px;
         /* the last row is flexible, so a tall habits column grows it
            instead of pulling the report and trends apart */
         grid-template-rows: auto auto auto auto 1fr;
@@ -1012,7 +1012,16 @@ body.has-top-bar .champions-shell { padding-top: var(--gutter); }
     }
     #coachReport .coach-tile:nth-child(5) { grid-column: 6; }
     #coachReport .coach-tile-foot { flex-wrap: wrap; justify-content: center; column-gap: 8px; }
-    #coachReport .coach-tile-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Long labels ("Kill Participation") wrap to a second line instead of
+       being cut off; two lines are reserved so every value lines up */
+    #coachReport .coach-tile-label {
+        min-height: 2.5em; line-height: 1.25;
+        display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Habits heading: the hint goes under the title in the narrow column */
+    .coach-slot-habits .coach-section-label { flex-wrap: wrap; row-gap: 2px; }
+    .coach-slot-habits .coach-section-label .coach-dim { flex-basis: 100%; }
 }
 
 /* A dialog is open: the page doesn't scroll behind it (#63) */
