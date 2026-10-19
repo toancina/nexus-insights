@@ -73,6 +73,42 @@ const SKINS = [
             ].join(', '),
         },
     },
+    {
+        id: 'black-orange',
+        name: 'Black & Orange',
+        description: 'Pure black with a hot orange accent.',
+        swatches: ['#ff9000', '#ffa31a', '#ffffff', '#000000'],
+        vars: {
+            '--bg-primary':      '#000000',
+            '--accent-primary':  '#ff9000',
+            '--accent-rgb':      '255, 144, 0',
+            '--accent-deep':     '#e07e00',
+            '--on-accent':       '#000000',
+            '--accent-secondary':'#ffa31a',
+            '--gold':            '#ffa31a',
+            '--gold-rgb':        '255, 163, 26',
+            '--gold-light':      '#ffffff',
+            '--bg-card':         'rgba(255, 255, 255, 0.06)',
+            '--bg-card-hover':   'rgba(255, 255, 255, 0.09)',
+            '--border-primary':  'rgba(255, 255, 255, 0.09)',
+            '--border-hover':    'rgba(255, 144, 0, 0.45)',
+            '--surface':         'rgba(255, 255, 255, 0.04)',
+            '--surface-hover':   'rgba(255, 255, 255, 0.07)',
+            '--line':            'rgba(255, 255, 255, 0.08)',
+            '--line-strong':     'rgba(255, 255, 255, 0.16)',
+            '--text-secondary':  '#c6c6c6',
+            '--text-tertiary':   '#8a8a8a',
+        },
+        overlay: 'rgba(0, 0, 0, 0.85)',
+        background: {
+            type: 'gradient',
+            // near-black with a faint orange glow at the top
+            css: [
+                'radial-gradient(ellipse at 50% -10%, rgba(255, 144, 0, 0.10), transparent 55%)',
+                'linear-gradient(180deg, #0a0a0a 0%, #000000 100%)',
+            ].join(', '),
+        },
+    },
 ];
 
 const DEFAULT_SKIN = 'default';
