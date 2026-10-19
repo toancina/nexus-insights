@@ -51,7 +51,7 @@ function teammateTable(matches, teammatesByMatch, { minGames = MIN_GAMES } = {})
         .sort((a, b) => (b.games - a.games) || (b.lastPlayed - a.lastPlayed));
 }
 
-// Columns the Allies table can sort by (#30), and the direction a first click uses
+// Columns the Teammates table can sort by (#30), and the direction a first click uses
 const SORT_KEYS = { name: 'asc', games: 'desc', winRate: 'desc', wins: 'desc', losses: 'desc' };
 
 /**

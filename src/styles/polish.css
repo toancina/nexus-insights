@@ -1,6 +1,6 @@
 /* ==========================================================================
    Layer scale (#63): every z-index in the app uses one of these. Pages are not
-   their own layers (.app-container has no z-index), so these compare across
+   their own layers (.page-tab / .page have no z-index), so these compare across
    the whole window. test/zindex.test.js fails on a raw number.
    ========================================================================== */
 :root {
@@ -237,6 +237,10 @@
     top: 2px;
     right: 6px;
 }
+/* "Teammates" is the longest one-word label: kept on one line (bold when
+   active) instead of breaking as "Teammate / s" (#87) */
+.nav-rail .nav-drawer-btn .nav-text { letter-spacing: -0.01em; }
+#navTeammates .nav-text { white-space: nowrap; }
 /* No count yet: no grey dot (#74) */
 .nav-count:empty { display: none; }
 
@@ -255,13 +259,6 @@
 /* ==========================================================================
    Match History
    ========================================================================== */
-.section-header { margin-bottom: var(--s3); }
-.section-title {
-    font-size: var(--t-label);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--text-secondary);
-}
 .match-count-badge {
     font-size: var(--t-small);
     background: transparent;
@@ -279,21 +276,6 @@
 .match-table-container::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); }
 .match-table-container::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
 .match-table-container::-webkit-scrollbar-track { background: transparent; }
-
-.match-table thead th {
-    background: rgb(22, 24, 30);
-    border-bottom: 1px solid var(--line-strong);
-    box-shadow: none;
-}
-.match-table th {
-    padding: var(--s3) var(--s2);
-    font-size: var(--t-label);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-}
-.match-table td { font-size: 14px; }
-.match-table tbody tr:hover { transform: none; background: var(--surface-hover); }
 
 .load-more-bar {
     background: var(--surface);
@@ -370,15 +352,6 @@
     border-radius: var(--r-card);
 }
 
-/* Page titles (Coaching, Chat) share one size */
-.coach-header h2,
-.chat-title {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--gold-light);
-}
-.coach-header p,
-.chat-sub { font-size: var(--t-small); color: var(--text-secondary); }
 
 /* ==========================================================================
    Frame: floating glass rail + one even 12px gutter
@@ -414,19 +387,6 @@ body {
     box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.35);
 }
 
-.app-container {
-    max-width: none;
-    padding: calc(var(--titlebar-height) + var(--gutter)) var(--gutter) var(--gutter);
-}
-.main-card { border-radius: var(--r-panel); }
-
-/* Coaching / Chat pages: same top gutter so the pages don't jump on switch */
-.coaching-shell { padding-top: calc(var(--titlebar-height) + var(--gutter)); }
-.chat-shell {
-    padding-top: calc(var(--titlebar-height) + var(--gutter));
-    padding-bottom: var(--gutter);
-    height: 100vh;
-}
 
 /* ==========================================================================
    Rank cards: same size and layout as every other stat card
@@ -535,11 +495,6 @@ body {
 /* ==========================================================================
    Skins page
    ========================================================================== */
-.skins-shell {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: calc(var(--titlebar-height) + var(--gutter)) 24px 40px;
-}
 .skins-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -628,7 +583,6 @@ body {
 /* ==========================================================================
    Coaching page (rewritten 2026-10) — components/coachingPanel.js
    ========================================================================== */
-.coaching-shell { max-width: 1100px; }
 #coaching-panel-content .good { color: #4ade80; }
 #coaching-panel-content .bad  { color: #f87171; }
 #coaching-panel-content .coach-section-label {
@@ -830,26 +784,11 @@ body {
 .skins-dim-box input:focus { outline: none; border-color: rgba(var(--accent-rgb), 0.6); box-shadow: var(--focus-ring); }
 #skinDimDefault { min-width: 56px; }
 
-/* The Analytics page lives inside an .app-container that also holds the
-   (fixed-position) Settings dialog. Switching pages hides #analytics-tab but
-   left that wrapper — and its titlebar + gutter padding — in the flow, so
-   every other page started ~56px lower. Collapse it when Analytics is hidden. */
-.app-container:has(> #analytics-tab[style*="none"]) {
-    padding: 0;
-}
-
-/* Match History: the list kept a 24px top margin from when it sat under the
-   Analytics content. On its own page that stacked on the card padding, so the
-   label started far lower than the first row on Analytics. Match Analytics:
-   18px card padding, nothing extra. */
-#history-tab .main-card { padding-top: 18px; }
-#history-tab .match-history { margin-top: 0; }
-
 /* ==========================================================================
    Shared top bar (#52)
    --------------------------------------------------------------------------
    Riot ID, Sync and the filters live in #topBar, outside the pages, and show
-   on Analytics, Match History, Champions and Allies (body.has-top-bar, set by
+   on Analytics, Match History, Champions and Teammates (body.has-top-bar, set by
    switchTopTab). Sticky: it scrolls with the page until it reaches the title
    bar, then stays there. The pages under it drop the title-bar part of their
    top padding, since the bar now sits there.
@@ -877,9 +816,6 @@ body.has-top-bar .top-bar { display: block; }
     padding: 12px 18px;
 }
 .top-bar-card .progress-container { margin-top: 12px; }
-
-body.has-top-bar .app-container,
-body.has-top-bar .champions-shell { padding-top: var(--gutter); }
 
 /* The account shown in the top bar is set in Settings (#73): click opens it */
 .top-bar .input-field[readonly] { cursor: pointer; }
@@ -985,7 +921,6 @@ body.has-top-bar .champions-shell { padding-top: var(--gutter); }
 .coach-rank-title { font-size: 18px; margin: 0; }
 
 @media (min-width: 1400px) {
-    .coaching-shell { max-width: 1840px; }
     .coach-layout {
         grid-template-columns: minmax(0, 1fr) 400px;
         /* the last row is flexible, so a tall habits column grows it
@@ -1019,8 +954,10 @@ body.has-top-bar .champions-shell { padding-top: var(--gutter); }
         display: flex; align-items: center; justify-content: center;
     }
 
-    /* Habits heading: the hint goes under the title in the narrow column */
+    /* Habits heading: the hint goes under the title in the narrow column,
+       level with the rank strip beside it */
     .coach-slot-habits .coach-section-label { flex-wrap: wrap; row-gap: 2px; }
+    #coaching-panel-content .coach-slot-habits .coach-section-label:first-child { margin-top: 0; }
     .coach-slot-habits .coach-section-label .coach-dim { flex-basis: 100%; }
 }
 
@@ -1060,26 +997,174 @@ body:not(.has-top-bar) .page-scroll { margin-top: var(--titlebar-height); }
 /* A dialog is open: the page behind it doesn't scroll (#63) */
 body.modal-open .page-scroll { overflow: hidden; }
 
-/* The area already starts below the title bar: pages keep only the gutter */
-.page-scroll .app-container,
-.page-scroll .champions-shell,
-.page-scroll .coaching-shell,
-.page-scroll .skins-shell,
-.page-scroll .chat-shell { padding-top: var(--gutter); }
 
-/* Chat fills the area; its messages scroll inside */
-#chat-tab { height: 100%; }
-.page-scroll .chat-shell { height: 100%; }
-
-/* Match History: the table fills the area and is the only thing that scrolls */
-#history-tab { height: 100%; }
-#history-tab > .app-container {
-    height: 100%;
+/* ==========================================================================
+   Pages (#87): one shell, one header, one panel, one table
+   --------------------------------------------------------------------------
+   Every page is
+       <div id="…-tab" class="page-tab">
+         <section class="page">
+           <header class="page-header">
+             <div class="page-heading"> .page-title + optional .page-desc </div>
+             <div class="page-actions"> optional buttons / badges </div>
+           </header>
+           … panels …
+   Every page is full width on the same gutter, so switching pages never
+   moves the content's left edge. The gutter is #pageScroll's padding.
+   Inside a page, boxes are panels (--surface / --line / --r-card) with a
+   .panel-title label, and every data table shares one look.
+   ========================================================================== */
+.page-scroll {
     box-sizing: border-box;
+    padding: var(--gutter);
+}
+
+.page-tab {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+.page {
+    flex: 1 0 auto;
+    position: relative;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: var(--s4) var(--s5) var(--s5);
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--r-panel);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Page header: title, one-line description, actions on the right */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--s3) var(--s4);
+    margin-bottom: var(--s4);
+}
+.page-heading { flex: 1 1 320px; min-width: 0; }
+.page-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--gold-light);
+}
+.page-desc {
+    margin: 2px 0 0;
+    font-size: var(--t-small);
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+.page-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s2);
+}
+
+/* Pages that fill the area and scroll inside (Match History, Chat; Champions
+   when its columns sit side by side) instead of growing the page */
+.page-tab--fill { height: 100%; }
+.page-tab--fill > .page {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
-#history-tab .main-card,
+.page-tab--fill .page-header { flex: none; }
+@media (min-width: 1201px) {
+    .page-tab--fill-wide { height: 100%; }
+    .page-tab--fill-wide > .page {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+}
+
+/* Panel: every box inside a page */
+.panel,
+.match-table-container,
+.load-more-bar,
+.champions-list,
+.champions-detail,
+.ch-card,
+.teammates-list,
+.role-breakdown,
+.death-map,
+.lane-gap,
+.lp-chart-card,
+.ta-card,
+.stat-history-card,
+.live-row,
+.coach-rank,
+.coach-report,
+.coach-area,
+.coach-col,
+.skin-card,
+.skins-bg,
+.chat-messages {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+}
+.panel { padding: var(--s4); }
+
+/* Panel / section label */
+.panel-title,
+.rb-title,
+.ch-card-title,
+.live-team h3,
+.coach-section-label {
+    font-size: var(--t-label);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+/* Tables: Match History (and its expanded row), Champions, Matchups,
+   Teammates, Roles, game report, death zones */
+:root { --table-head-bg: rgb(20, 22, 29); }
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) thead th {
+    padding: 10px var(--s2);
+    background: var(--table-head-bg);
+    border-bottom: 1px solid var(--line-strong);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    font-size: var(--t-label);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) > tbody > tr:not(.expanded-row) > td {
+    padding: var(--s2);
+    border-top: 1px solid var(--line);
+    border-bottom: 0;
+    font-size: var(--t-body);
+}
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) > tbody > tr:first-child > td { border-top: 0; }
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table) > tbody > tr:hover {
+    transform: none;
+    background: var(--surface-hover);
+}
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Match History fills its page; only the table scrolls */
+.match-history { position: relative; }
 #history-tab .match-history,
 #history-tab .match-list {
     flex: 1 1 auto;
@@ -1088,7 +1173,6 @@ body.modal-open .page-scroll { overflow: hidden; }
     flex-direction: column;
 }
 #history-tab .match-history[style*="none"] { display: none; }
-#history-tab .section-header,
 #history-tab .load-more-bar { flex: none; }
 #history-tab .match-table-container {
     flex: 1 1 auto;
@@ -1099,14 +1183,6 @@ body.modal-open .page-scroll { overflow: hidden; }
 /* Champions: list and detail scroll on their own, side by side. Below
    1200px they stack (app.css), and the page scrolls as one instead. */
 @media (min-width: 1201px) {
-    #champions-tab { height: 100%; }
-    #champions-tab > .champions-shell {
-        height: 100%;
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-        padding-bottom: var(--gutter);
-    }
     #champions-tab .champions-layout {
         flex: 1 1 auto;
         min-height: 0;
@@ -1120,13 +1196,20 @@ body.modal-open .page-scroll { overflow: hidden; }
     }
 }
 
-/* Allies: column headers stay at the top of the scroll area. `clip` keeps
-   the rounded corners without making the list a scroll container, which
-   would stop the headers sticking. */
+/* Teammates: column headers stay at the top of the scroll area. `clip`
+   keeps the rounded corners without making the list a scroll container,
+   which would stop the headers sticking. */
 .teammates-list { overflow: clip; }
 .tm-table thead th {
     position: sticky;
-    top: 0;
+    /* the scroll area's top padding (the gutter) would otherwise show rows
+       scrolling past above the header */
+    top: calc(-1 * var(--gutter));
     z-index: var(--z-sticky);
-    background: rgba(18, 20, 28, 0.97);
 }
+
+/* Chat fills its page; the messages scroll inside. Bubbles keep a readable
+   line length on a wide window. */
+.chat-page { gap: var(--s3); }
+.chat-page > .page-header { margin-bottom: 0; }
+.chat-bubble { max-width: min(82%, 860px); }

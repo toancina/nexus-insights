@@ -144,7 +144,7 @@ function render() {
         </section>`).join('')}</div>`;
 }
 
-/** "N games together" for allies, from the Allies page's table (#11). */
+/** "N games together" for allies, from the Teammates page's table (#11). */
 async function loadTogether(gen) {
     try {
         const map = await loadTeammates();
