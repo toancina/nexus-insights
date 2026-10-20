@@ -8,19 +8,27 @@
  *   chatRemote.js          cloud providers (#91): Mistral or any OpenAI-compatible API, over
  *                          IPC to services/chatBridge.js, which holds the key and makes the calls
  *   markdown.js            safe rendering of the model's answers
+ *   services/chatStore.js  saved chats, one file each in <data folder>/chats/
  *
  * The API key is typed here once, sent to the main process and encrypted
  * there (services/secretStore.js). This window never gets it back: only
  * "saved, ends in a1b2".
  *
+ * A chat is saved after every answer, once its first answer is in. Stopped
+ * and failed answers aren't saved, just as they aren't sent to the model
+ * again. Opening a saved chat carries it on with the model picked now.
+ *
  * Exposes window.openChatPanel(), called by switchTopTab('chat').
  */
 
+const path              = require('path');
 const { ipcRenderer }   = require('electron');
 const { createClient }  = require('../services/ollama');
 const { createRemoteClient, keyApi } = require('./chatRemote');
 const { PROVIDERS }     = require('../services/chatProviders');
 const { loadConfig }    = require('../services/config');
+const { userDataPath }  = require('../services/paths');
+const { createChatStore, newChatId, titleFor, whenLabel } = require('../services/chatStore');
 const {
     getCoachingData, getLpReadings, absoluteLp,
 } = require('../services/matchService');
@@ -56,6 +64,12 @@ const SUGGESTIONS = [
 const ollama = createClient();
 const remoteClients = {};
 const keys = keyApi(ipcRenderer);
+const chats = createChatStore({ dir: path.join(userDataPath, 'chats') });
+
+/** A chat that isn't on disk yet: it is saved with its first answer. */
+function blankChat() {
+    return { id: newChatId(), title: '', createdAt: null, updatedAt: null, messages: [] };
+}
 
 const state = {
     initialised: false,
@@ -65,7 +79,7 @@ const state = {
     models: [],
     model: null,
     up: false,          // the provider answered: Ollama running, or the key accepted
-    history: [],        // [{ role, content }] — final texts only
+    chat: blankChat(),  // the open chat; messages: [{ role, content, tools? }], final texts only
     busy: false,
     abort: null,
 };
@@ -228,7 +242,7 @@ async function refreshModels() {
         state.models = [];
         state.up = false;
         setStatus('down', err.code === 'OLLAMA_DOWN' ? 'Ollama not running' : 'Ollama error');
-        renderEmptyState(err.message);
+        renderChat(err.message);
         populatePicker();
         return;
     }
@@ -242,11 +256,11 @@ async function refreshModels() {
 
     if (!state.model) {
         setStatus('down', 'No models installed');
-        renderEmptyState(`Ollama is running but has no models. In Command Prompt run:  ollama pull ${PREFERRED_MODEL}`);
+        renderChat(`Ollama is running but has no models. In Command Prompt run:  ollama pull ${PREFERRED_MODEL}`);
         return;
     }
     setStatus('ready', 'Ready');
-    if (!state.history.length) renderEmptyState();
+    clearProblem();
 }
 
 async function refreshCloudModels(gen) {
@@ -267,7 +281,7 @@ async function refreshCloudModels(gen) {
     updateFoot();
     if (!state.keyStatus || !state.keyStatus.saved) {
         setStatus('down', 'No API key');
-        renderEmptyState(`Add your ${p.label} API key above to chat with ${p.label}.`, { retry: false });
+        renderChat(`Add your ${p.label} API key above to chat with ${p.label}.`, { retry: false });
         return;
     }
 
@@ -277,7 +291,7 @@ async function refreshCloudModels(gen) {
     } catch (err) {
         if (gen !== refreshGen) return;
         setStatus('down', err.code === 'KEY_REJECTED' ? 'Key rejected' : err.code === 'NETWORK' ? 'Offline' : `${p.label} error`);
-        renderEmptyState(err.message);
+        renderChat(err.message);
         return;
     }
     if (gen !== refreshGen) return;
@@ -289,11 +303,11 @@ async function refreshCloudModels(gen) {
 
     if (!state.model) {
         setStatus('down', 'No models');
-        renderEmptyState(`${p.label} lists no chat models that can use tools for this key.`);
+        renderChat(`${p.label} lists no chat models that can use tools for this key.`);
         return;
     }
     setStatus('ready', 'Ready');
-    if (!state.history.length) renderEmptyState();
+    clearProblem();
 }
 
 function populatePicker() {
@@ -316,6 +330,12 @@ function scrollToBottom() {
     if (box) box.scrollTop = box.scrollHeight;
 }
 
+function problemHtml(problem, retry, extraClass = '') {
+    // No whitespace around the text: .chat-problem is pre-wrap, so it would show as a blank line
+    return `<div class="chat-problem${extraClass}">${escapeHtml(problem)}${
+        retry ? '<button class="chat-btn" type="button" id="chatRetry">Retry</button>' : ''}</div>`;
+}
+
 function renderEmptyState(problem, { retry = true } = {}) {
     const box = $('chatMessages');
     if (!box) return;
@@ -328,8 +348,7 @@ function renderEmptyState(problem, { retry = true } = {}) {
                 ? `The assistant can look up all ${games.toLocaleString('en-US')} of your stored games — by queue, champion, role or date.`
                 : 'Sync your matches first, then ask away.'}</p>
             ${problem
-                ? `<div class="chat-problem">${escapeHtml(problem)}
-                     ${retry ? '<button class="chat-btn" type="button" id="chatRetry">Retry</button>' : ''}</div>`
+                ? problemHtml(problem, retry)
                 : `<div class="chat-chips">${SUGGESTIONS.map(s =>
                      `<button class="chat-chip" type="button" data-q="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}</div>`}
         </div>`;
@@ -339,10 +358,37 @@ function renderEmptyState(problem, { retry = true } = {}) {
         chip.addEventListener('click', () => send(chip.dataset.q)));
 }
 
+/**
+ * The open chat's messages, or the welcome screen when it has none yet.
+ * `problem` (why the model can't answer) goes under the messages, so a
+ * saved chat stays readable while Ollama is down.
+ */
+function renderChat(problem, { retry = true } = {}) {
+    const box = $('chatMessages');
+    if (!box) return;
+    if (!state.chat.messages.length) { renderEmptyState(problem, { retry }); return; }
+    box.innerHTML = '';
+    for (const msg of state.chat.messages) {
+        if (msg.role === 'user') addUserBubble(msg.content);
+        else addAnswer(msg);
+    }
+    if (problem) {
+        box.insertAdjacentHTML('beforeend', problemHtml(problem, retry, ' chat-problem--inline'));
+        const retryBtn = $('chatRetry');
+        if (retryBtn) retryBtn.addEventListener('click', refreshModels);
+    }
+    scrollToBottom();
+}
+
+/** After a successful check: the welcome screen for an empty chat, and no stale problem under a saved one. */
+function clearProblem() {
+    if (!state.chat.messages.length) renderEmptyState();
+    else if (document.querySelector('#chatMessages .chat-problem')) renderChat();
+}
+
 function addUserBubble(text) {
     const box = $('chatMessages');
-    const empty = box.querySelector('.chat-empty');
-    if (empty) empty.remove();
+    box.querySelectorAll('.chat-empty, .chat-problem--inline').forEach(el => el.remove());
     const el = document.createElement('div');
     el.className = 'chat-msg chat-msg--user';
     el.innerHTML = `<div class="chat-bubble">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
@@ -367,6 +413,89 @@ function addAssistantBubble() {
         body: el.querySelector('.chat-body'),
         root: el,
     };
+}
+
+function addToolLine(activity, label) {
+    const line = document.createElement('div');
+    line.className = 'chat-tool';
+    line.textContent = `🔎 Looked up ${label}`;
+    activity.appendChild(line);
+}
+
+/** A saved answer, drawn as it looked when it came in. */
+function addAnswer(msg) {
+    const ui = addAssistantBubble();
+    for (const label of msg.tools || []) addToolLine(ui.activity, label);
+    ui.body.innerHTML = renderMarkdown(msg.content);
+}
+
+// ---------------------------------------------------------------------------
+// Saved chats
+// ---------------------------------------------------------------------------
+
+function renderChatList() {
+    const box = $('chatList');
+    if (!box) return;
+    const saved = chats.list();
+    if (!saved.length) {
+        box.innerHTML = '<div class="chat-list-empty">Your chats are saved here after the first answer.</div>';
+        return;
+    }
+    const now = Date.now();
+    box.innerHTML = saved.map(c => {
+        const current = c.id === state.chat.id;
+        return `
+        <div class="chat-list-item${current ? ' is-current' : ''}" data-chat-id="${escapeHtml(c.id)}">
+            <button class="chat-list-open" type="button" title="${escapeHtml(c.title)}"${current ? ' aria-current="true"' : ''}>
+                <span class="chat-list-name">${escapeHtml(c.title)}</span>
+                <span class="chat-list-when">${escapeHtml(whenLabel(c.updatedAt, now))}</span>
+            </button>
+            <button class="chat-list-delete" type="button" title="Delete this chat" aria-label="Delete chat">×</button>
+        </div>`;
+    }).join('');
+}
+
+/** Write the chat after an answer. `chat` may no longer be the open one. */
+function saveChat(chat) {
+    if (chat.deleted) return;
+    const now = Date.now();
+    chat.title = chat.title || titleFor((chat.messages.find(m => m.role === 'user') || {}).content);
+    chat.createdAt = chat.createdAt || now;
+    chat.updatedAt = now;
+    try {
+        chats.save(chat);
+    } catch (err) {
+        console.warn('Chat: saving failed:', err.message);
+        if (window.showToast) window.showToast('Chat not saved', err.message, 6000);
+    }
+    renderChatList();
+}
+
+function openChat(id) {
+    if (id === state.chat.id) return;
+    const chat = chats.load(id);
+    if (!chat) { renderChatList(); return; }   // deleted outside the app
+    stop();
+    state.chat = chat;
+    renderChatList();
+    renderChat();
+    const input = $('chatInput');
+    if (input) input.focus();
+}
+
+function deleteChat(id, title) {
+    if (!window.confirm(`Delete "${title}"?\n\nThis can't be undone.`)) return;
+    try {
+        chats.remove(id);
+    } catch (err) {
+        console.warn('Chat: deleting failed:', err.message);
+    }
+    if (id === state.chat.id) {
+        state.chat.deleted = true;   // an answer still on its way must not save it again
+        newChat();
+    } else {
+        renderChatList();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -444,12 +573,14 @@ async function send(rawText) {
     setBusy(true);
     setStatus('working', 'Thinking…');
 
+    const chat = state.chat;    // another chat may be opened before the answer is in
     const ctx = toolContext();
     const messages = [
         { role: 'system', content: systemPrompt(ctx) },
-        ...trimHistory(state.history),
+        ...trimHistory(chat.messages),
         { role: 'user', content: text },
     ];
+    const lookedUp = [];
 
     let streamed = '';
     let frame = null;
@@ -482,10 +613,8 @@ async function send(rawText) {
                     streamed = '';
                     ui.body.innerHTML = '<span class="chat-typing"><i></i><i></i><i></i></span>';
                 } else if (ev.type === 'tool') {
-                    const line = document.createElement('div');
-                    line.className = 'chat-tool';
-                    line.textContent = `🔎 Looked up ${ev.label}`;
-                    ui.activity.appendChild(line);
+                    lookedUp.push(ev.label);
+                    addToolLine(ui.activity, ev.label);
                     setStatus('working', 'Looking things up…');
                     scrollToBottom();
                 } else if (ev.type === 'thinking') {
@@ -496,7 +625,10 @@ async function send(rawText) {
 
         if (frame) cancelAnimationFrame(frame);
         ui.body.innerHTML = renderMarkdown(result.text);
-        state.history.push({ role: 'user', content: text }, { role: 'assistant', content: result.text });
+        chat.messages.push(
+            { role: 'user', content: text },
+            { role: 'assistant', content: result.text, ...(lookedUp.length ? { tools: lookedUp } : {}) });
+        saveChat(chat);
         setStatus('ready', 'Ready');
     } catch (err) {
         if (frame) cancelAnimationFrame(frame);
@@ -526,7 +658,8 @@ function stop() {
 
 function newChat() {
     stop();
-    state.history = [];
+    state.chat = blankChat();
+    renderChatList();
     if (state.up) renderEmptyState();
     else refreshModels();
 }
@@ -606,6 +739,20 @@ function init() {
         updateFoot();
     });
     $('chatNew').addEventListener('click', newChat);
+
+    const list = $('chatList');
+    if (list) {
+        list.addEventListener('click', e => {
+            const item = e.target.closest('[data-chat-id]');
+            if (!item) return;
+            if (e.target.closest('.chat-list-delete')) {
+                deleteChat(item.dataset.chatId, item.querySelector('.chat-list-name').textContent);
+            } else {
+                openChat(item.dataset.chatId);
+            }
+        });
+    }
+    renderChatList();
 }
 
 window.openChatPanel = function () {

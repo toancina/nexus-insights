@@ -1111,7 +1111,8 @@ body.modal-open .page-scroll { overflow: hidden; }
 .skin-card,
 .skins-bg,
 .chat-messages,
-.chat-keybar {
+.chat-keybar,
+.chat-list {
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r-card);
@@ -1124,7 +1125,8 @@ body.modal-open .page-scroll { overflow: hidden; }
 .ch-card-title,
 .live-team h3,
 .live-next-title,
-.coach-section-label {
+.coach-section-label,
+.chat-list-title {
     font-size: var(--t-label);
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -1215,3 +1217,90 @@ body.modal-open .page-scroll { overflow: hidden; }
 .chat-page { gap: var(--s3); }
 .chat-page > .page-header { margin-bottom: 0; }
 .chat-bubble { max-width: min(82%, 860px); }
+
+/* Saved chats beside the open one; each column scrolls on its own */
+.chat-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: var(--s3);
+}
+.chat-main {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+}
+.chat-list {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: var(--s3) var(--s2);
+}
+.chat-list-title { padding: 0 var(--s2) var(--s2); }
+.chat-list-items {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.chat-list-empty {
+    padding: var(--s2);
+    font-size: var(--t-small);
+    color: var(--text-tertiary);
+}
+.chat-list-item {
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    border-radius: var(--r-ctl);
+    border: 1px solid transparent;
+}
+.chat-list-item:hover { background: var(--bg-card-hover); }
+.chat-list-item.is-current {
+    background: rgba(var(--accent-rgb), 0.12);
+    border-color: rgba(var(--accent-rgb), 0.35);
+}
+.chat-list-open {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--s2);
+    background: none;
+    border: 0;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.chat-list-name {
+    font-size: var(--t-small);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.chat-list-when { font-size: var(--t-label); color: var(--text-tertiary); }
+.chat-list-delete {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    margin-right: var(--s1);
+    border: 0;
+    border-radius: var(--r-ctl);
+    background: none;
+    color: var(--text-tertiary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+}
+.chat-list-item:hover .chat-list-delete,
+.chat-list-delete:focus-visible { opacity: 1; }
+.chat-list-delete:hover { color: #fca5a5; background: rgba(239, 68, 68, 0.12); }
+/* "Ollama not running" under a saved chat's messages */
+.chat-problem--inline { align-self: center; }
