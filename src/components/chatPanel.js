@@ -30,8 +30,10 @@ const { loadConfig }    = require('../services/config');
 const { userDataPath }  = require('../services/paths');
 const { createChatStore, newChatId, titleFor, whenLabel } = require('../services/chatStore');
 const {
-    getCoachingData, getLpReadings, absoluteLp,
+    getCoachingData, getLpReadings, absoluteLp, getMatchById,
 } = require('../services/matchService');
+const { getItemData, getRuneData } = require('../services/dataDragon');
+const { isCoreItem, isBuildItem, isExcludedItem } = require('./itemKinds');
 const chatTools          = require('./chatTools');
 const { runAgent, buildSystemPrompt, stripThink, trimHistory } = require('./chatAgent');
 const { renderMarkdown } = require('./markdown');
@@ -48,9 +50,10 @@ const PROVIDER_OPTIONS = [['ollama', 'Ollama (this PC)'], ...Object.values(PROVI
 
 // num_ctx: Ollama's default context is small and silently truncates the
 // START of the conversation — i.e. the system prompt and tool rules — once
-// tool results pile up. 8k fits several tool rounds of the compact results.
+// tool results pile up. The 11 tool schemas take ~3.5k tokens and one game's
+// detail ~1k, so 16k leaves room for several tool rounds and the history.
 // Cloud providers use only the temperature.
-const MODEL_OPTIONS = { num_ctx: 8192, temperature: 0.4 };
+const MODEL_OPTIONS = { num_ctx: 16384, temperature: 0.4 };
 
 const SUGGESTIONS = [
     'How did my last 10 games go?',
@@ -58,7 +61,8 @@ const SUGGESTIONS = [
     'How has my win rate changed this year?',
     'What should I focus on to climb?',
     'Where am I weakest in the laning phase?',
-    'Compare my Solo/Duo and Flex results',
+    'Why did I win or lose my last game?',
+    'Which items give me the most win chance?',
 ];
 
 const ollama = createClient();
@@ -516,6 +520,11 @@ function toolContext() {
         lpDeltas: window.lpDeltas || {},
         seasonStart: seasonStart(),
         now: () => new Date(),
+        getMatchById,
+        prefetchTabJson: window.prefetchTabJson,
+        itemName: id => (getItemData(id) || {}).name || `Item ${id}`,
+        runeName: id => (getRuneData(id) || {}).name || null,
+        isCoreItem, isBuildItem, isExcludedItem,
     };
 }
 

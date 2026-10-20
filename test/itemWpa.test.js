@@ -127,3 +127,33 @@ test('formatWpa: sign from the rounded value, never "-0.0"', () => {
     assert.equal(W.formatWpa(0.04), '0.0');
     assert.equal(W.formatWpa(0), '0.0');
 });
+
+test('itemTable: one row per item, from its first purchase after the opening shop', () => {
+    const points = linear(30);
+    const g = (win, purchases) => ({ win, purchases, wpa: W.itemWpa(purchases, points) });
+    const games = [
+        // 1055 in the opening shop doesn't count; 3089 twice in one game counts once (its first purchase)
+        g(true,  [buy(1055, 10), buy(3089, 600), buy(3020, 900), buy(3089, 1500)]),
+        g(false, [buy(3089, 720)]),
+        g(true,  [buy(3020, 480)]),
+    ];
+    const rows = W.itemTable(games);
+    const r = id => rows.find(x => x.itemId === id);
+    assert.equal(r(1055), undefined);
+    assert.equal(r(3089).games, 2);
+    assert.equal(r(3089).wins, 1);
+    close(r(3089).avgT, 660 * S);
+    close(r(3089).pickRate, 2 / 3);
+    assert.equal(r(3089).wpaGames, 2);
+    // 600 s → next trip at 900 s (5 min), 720 s → last frame cap 5 min: both +5
+    close(r(3089).wpa, 5);
+    assert.equal(rows[0].games >= rows[rows.length - 1].games, true, 'most bought first');
+    assert.deepEqual(W.itemTable(games, id => id !== 3020).map(x => x.itemId), [3089]);
+});
+
+test('itemTable: games without a curve count, but give no WPA', () => {
+    const rows = W.itemTable([{ win: true, purchases: [buy(3089, 600)], wpa: [null] }]);
+    assert.equal(rows[0].games, 1);
+    assert.equal(rows[0].wpa, null);
+    assert.equal(rows[0].wpaGames, 0);
+});

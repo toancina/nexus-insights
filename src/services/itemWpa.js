@@ -14,7 +14,7 @@
  * the item, not what the item caused.
  */
 
-const { FIRST_BACK_WINDOW_MS, encodePurchases, decodePurchases } = require('./itemBuild');
+const { STARTING_CUTOFF_MS, FIRST_BACK_WINDOW_MS, encodePurchases, decodePurchases } = require('./itemBuild');
 
 const TRIP_GAP_MS   = FIRST_BACK_WINDOW_MS;   // same 60 s the "First back" row uses
 const WINDOW_CAP_MS = 5 * 60 * 1000;
@@ -106,6 +106,36 @@ function lastPurchaseWpa(purchases, points) {
     return out;
 }
 
+/**
+ * One row per item over many games (Chat): games it was bought in, wins, pick
+ * rate, when it was bought and its average WPA, from each game's first
+ * purchase of it after the opening shop, the purchase the Build order card's
+ * rows use. Most-bought first.
+ * @param {Array<{purchases, wpa, win}>} games  wpa aligned with purchases (itemWpa)
+ * @param {Function} isCounted  itemId → whether it gets a row (finished items)
+ */
+function itemTable(games, isCounted = () => true) {
+    const rows = new Map();
+    for (const g of games) {
+        const seen = new Set();
+        (g.purchases || []).forEach((p, i) => {
+            if (p.t <= STARTING_CUTOFF_MS || seen.has(p.itemId) || !isCounted(p.itemId)) return;
+            seen.add(p.itemId);
+            const r = rows.get(p.itemId) || { itemId: p.itemId, games: 0, wins: 0, tSum: 0, wpaSum: 0, wpaGames: 0 };
+            r.games++;
+            if (g.win) r.wins++;
+            r.tSum += p.t;
+            const w = g.wpa && g.wpa[i];
+            if (w) { r.wpaSum += w.wpa; r.wpaGames++; }
+            rows.set(p.itemId, r);
+        });
+    }
+    return [...rows.values()].map(({ tSum, wpaSum, ...r }) => ({
+        ...r, winRate: r.wins / r.games, pickRate: games.length ? r.games / games.length : 0,
+        avgT: tSum / r.games, wpa: r.wpaGames ? wpaSum / r.wpaGames : null,
+    })).sort((a, b) => b.games - a.games);
+}
+
 /** An average WPA for display: "+3.1", "\u22120.3", "0.0" (sign from the rounded value). */
 function formatWpa(value) {
     const v = Math.round(value * 10) / 10;
@@ -122,5 +152,5 @@ function wpaLine(from, to) {
 module.exports = {
     TRIP_GAP_MS, WINDOW_CAP_MS,
     encodeWinChance, decodeWinChance, winChancePoints, seriesPoints, asStored, chanceAt,
-    itemWpa, lastPurchaseWpa, formatWpa, wpaLine,
+    itemWpa, lastPurchaseWpa, itemTable, formatWpa, wpaLine,
 };
