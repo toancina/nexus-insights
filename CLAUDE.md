@@ -118,6 +118,7 @@ src/
 │   ├── updater.js             # electron-updater wrapper (GitHub Releases)
 │   ├── ollama.js              # Local Ollama client
 │   ├── openaiChat.js / chatBridge.js / chatProviders.js  # Cloud chat: client, main-process bridge, providers (#91)
+│   ├── chatStore.js           # Saved chats, one JSON file each in <data folder>/chats/
 │   ├── secretStore.js         # Chat API keys, encrypted with safeStorage (main only, #91)
 │   ├── nextItem.js            # Live page: next item from your games + item WPA (#90)
 │   ├── liveClient.js          # League Live Client Data API
@@ -1127,6 +1128,28 @@ and the app answers with values from the same formulas as the stat cards.
 - Tests: `chatTools`, `ollama` (fake HTTP server), `chatAgent`, `markdown` (XSS).
   `chatPanel.js` itself needs Electron + sqlite and is checked by hand.
 - **If you add a tool**, add its schema to `TOOLS` and a `describeCall` label.
+
+**Saved chats.** Every chat is a file in `<data folder>/chats/<id>.json`
+(`services/chatStore.js`, pure, tested): `{ id, title, createdAt, updatedAt,
+messages: [{ role, content, tools? }] }`, i.e. the texts the page shows,
+with the "Looked up …" labels, not the tool traffic.
+
+- Written after every answer (temp file + rename), first on the first
+  answer, so "New chat" leaves no empty files. Stopped or failed answers
+  aren't saved, the same as they aren't sent to the model again.
+- "Saved chats" list left of the messages, most recently used first;
+  clicking one opens it and carries it on with the provider/model picked
+  now (still `trimHistory`'s last 6 turns as context). × deletes after a
+  `confirm`. Not per account.
+- `send` keeps the chat it started in (`const chat = state.chat`), so an
+  answer that lands after another chat was opened goes to the right file;
+  a deleted chat is flagged so a late answer can't write it back.
+- `load` keeps only user/assistant messages with string content, and ids
+  must match `[a-z0-9-]`, so an edited file or id can't break the page or
+  reach outside the folder.
+- With a saved chat open, "Ollama not running" / "No API key" shows
+  **under** the messages (`renderChat(problem)`), not in place of them;
+  `clearProblem` removes it after a successful check.
 
 **Cloud providers (#91).** A Provider dropdown: Ollama (default), Mistral, or
 any OpenAI-compatible API (base URL + key: OpenAI, OpenRouter, Groq, LM
