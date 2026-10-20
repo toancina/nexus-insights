@@ -71,6 +71,7 @@ src/
 │   ├── coachingBoard.js       # Coaching habit board (#61, pure, tested)
 │   ├── coachingEngine.js      # Habit metrics; ranks the focus for Chat
 │   ├── chatPanel.js / chatAgent.js / chatTools.js / markdown.js  # Chat page (Ollama or a cloud API key)
+│   ├── chatFilters.js         # Chat: the filters every data tool takes, and which values have games
 │   ├── chatRemote.js          # Chat: the window's side of cloud providers (IPC to services/chatBridge.js, #91)
 │   ├── liveGamePanel.js       # Live page (#59), Next item card (#90)
 │   ├── itemKinds.js           # Which items count as a build (Champions + Live)
@@ -110,6 +111,7 @@ src/
 │   ├── gameReport.js          # Game report numbers (#9)
 │   ├── itemBuild.js           # Item purchases + build order (#7)
 │   ├── itemWpa.js             # Item WPA: win-chance change after a purchase (#89)
+│   ├── winChanceStats.js      # Win-chance curve in numbers: swings, throws, comebacks (Chat)
 │   ├── deathMap.js            # Death positions, density, zones (#8)
 │   ├── laneGaps.js            # Per-minute lane gaps (#12)
 │   ├── lpAttribution.js / lpEstimate.js  # Per-game LP (#1) / LP estimates (#5)
@@ -1112,15 +1114,57 @@ and the app answers with values from the same formulas as the stat cards.
 | File | Role |
 |------|------|
 | `services/ollama.js` | Node `http` client (no CORS): `listModels()`, streaming `chat()` with tools/think/abort. ECONNREFUSED → `OLLAMA_DOWN` |
-| `components/chatTools.js` | 8 tools (`get_overview`, `get_category_stats`, `get_stat_trend`, `get_champion_stats`, `get_role_stats`, `get_recent_games`, `get_rank_and_lp`, `get_coaching_focus`); shared filters queue/champion/role/since/until/last_n_games. `executeTool` never throws |
+| `components/chatTools.js` | 11 tools (below). `executeTool` never throws |
+| `components/chatFilters.js` | The shared filters (`FILTER_PROPS`, `applyFilters`) and `filterOptions` |
 | `components/chatAgent.js` | Tool-calling loop (`MAX_ROUNDS` 5, repeated calls cached, last round forces an answer), system prompt, `trimHistory` |
 | `components/markdown.js` | Escape-first Markdown → HTML (model output can't inject tags) |
 | `components/chatPanel.js` | UI; `window.openChatPanel()` called by `switchTopTab('chat')`, re-checks Ollama each open |
 
 - Tool context uses `excludeRemakes(window.matchesData)`, so the chat sees
   exactly what the cards see. "Ranked" means Solo/Duo unless Flex is asked.
-- `options: { num_ctx: 8192, temperature: 0.4 }` — the default context
-  silently drops the system prompt once tool results pile up.
+- **Tools:** `get_overview`, `get_category_stats`, `get_stat_trend`,
+  `get_breakdown` (by champion / role / lane_opponent / patch / queue; it
+  replaced `get_champion_stats` and `get_role_stats`), `get_recent_games`
+  (with `match_id`), `get_game_detail`, `get_item_stats`,
+  `get_win_chance_stats`, `get_filter_options`, `get_rank_and_lp`,
+  `get_coaching_focus`.
+- **Filters:** every data tool takes the same filters: `queue` (all, solo,
+  flex, ranked, premade, normal, or one normal mode: draft, blind,
+  swiftplay, quickplay, clash), `champion`, `role`, `lane_opponent`,
+  `result`, `patch` ("16.20" / "latest"), `last_n_patches`, `last_n_days`,
+  `since` / `until`, `min_minutes` / `max_minutes`, `last_n_games`. Period
+  filters run first, over every game, like the app's period dropdown
+  (`services/patches.js` `filterByPeriod`). `get_filter_options` lists the
+  values that have games.
+- **`get_game_detail`** (one game: the newest matching the filters, `nth`,
+  or `match_id`): the Game report's table, went well / wrong and blunders
+  (`services/gameReport.js`), the win chance per minute with peak, low and
+  the 3 biggest swings (`services/winChanceStats.js`: at least 10 points
+  within 3 minutes, not overlapping) and what happened in each (kills,
+  your deaths, objectives, structures from `matchTimeline.timelineEvents`),
+  finished items with purchase time and WPA, runes, deaths with zone and
+  killer, both teams with impact rank. Win chance and purchases come from
+  the stored columns; the timeline (`getMatchById`) adds the events and
+  fills in games not indexed yet. ~4k characters on real games.
+- **`get_item_stats`**: per finished item (`itemWpa.itemTable`: its first
+  purchase after the opening shop, once per game): games, pick and win
+  rate, average WPA (only from 5 games with a curve, like the Champions
+  page), usual purchase time. With a champion, the Build order card's rows
+  and first-back timing too.
+- **`get_win_chance_stats`**: average win chance at 10/15/20, win rate when
+  ahead (60%+) / even / behind (40% or less) at 15, throws (lost after
+  70%+) and comebacks (won after 30% or less) with the 5 newest.
+- Item and rune names, and which items are finished, come from the tool
+  context (`itemName`, `runeName`, `isCoreItem`, `isBuildItem`,
+  `isExcludedItem`), so chatTools stays testable without Data Dragon.
+  `get_category_stats`, `get_stat_trend` and `get_game_detail` await
+  `ctx.prefetchTabJson` first, so games not indexed yet aren't computed
+  from `null`.
+- `options: { num_ctx: 16384, temperature: 0.4 }`: the default context
+  silently drops the system prompt once tool results pile up. The 11 tool
+  schemas are ~12.5k characters (~3.5k tokens) and go with every request;
+  `test/chatTools.test.js` fails above 14,000. Keep filter descriptions
+  short. 16k costs Ollama ~1.2 GB more memory than 8k on qwen3:8b.
 - `think`: qwen3 gets `false` unless "Think harder" is ticked (much faster).
 - Model choice + think toggle persist in localStorage (`nexus.chatModel`,
   `nexus.chatThink`). Cloud models (`…:cloud` / `-cloud`) are listed last and
@@ -1128,6 +1172,12 @@ and the app answers with values from the same formulas as the stat cards.
 - Tests: `chatTools`, `ollama` (fake HTTP server), `chatAgent`, `markdown` (XSS).
   `chatPanel.js` itself needs Electron + sqlite and is checked by hand.
 - **If you add a tool**, add its schema to `TOOLS` and a `describeCall` label.
+  Prefer a parameter on an existing tool (like `get_breakdown`'s `by`) to a
+  new tool: each one adds to every request.
+- **Checking the Chat page without a model:** a fake Ollama on
+  127.0.0.1:11434 (`/api/tags` → one model; `/api/chat` → NDJSON with
+  `tool_calls` first, then text) shows exactly what the app sends and gets
+  back from the tools. Quit it afterwards: every running copy would use it.
 
 **Saved chats.** Every chat is a file in `<data folder>/chats/<id>.json`
 (`services/chatStore.js`, pure, tested): `{ id, title, createdAt, updatedAt,
