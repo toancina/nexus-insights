@@ -9,7 +9,7 @@ const path = require('path');
 const util = require('util');
 const { SRC } = require('./helpers');
 
-const { createOpenAiClient, toOpenAiMessages, isAllowedBaseUrl } = require(path.join(SRC, 'services', 'openaiChat.js'));
+const { createOpenAiClient, toOpenAiMessages, isAllowedBaseUrl, normalizeBaseUrl } = require(path.join(SRC, 'services', 'openaiChat.js'));
 
 const KEY = 'sk-test-0123456789abcdefSECRET';
 
@@ -267,4 +267,24 @@ test('isAllowedBaseUrl: https anywhere, plain http only on this PC', () => {
 
 test('the client refuses a base URL that would send the key unencrypted', () => {
     assert.throws(() => createOpenAiClient({ baseUrl: 'http://api.example.com/v1', apiKey: KEY }), /https/);
+});
+
+test('normalizeBaseUrl: a pasted endpoint becomes its base URL', () => {
+    assert.equal(normalizeBaseUrl('https://api.anthropic.com/v1/messages'), 'https://api.anthropic.com/v1');
+    assert.equal(normalizeBaseUrl(' https://api.openai.com/v1/chat/completions/ '), 'https://api.openai.com/v1');
+    assert.equal(normalizeBaseUrl('https://api.mistral.ai/v1/models'), 'https://api.mistral.ai/v1');
+    assert.equal(normalizeBaseUrl('https://openrouter.ai/api/v1/'), 'https://openrouter.ai/api/v1');
+});
+
+test('a pasted endpoint URL still lists models from {base}/models, and only Anthropic gets x-api-key', async () => {
+    const { server, requests, base } = await fakeProvider((req, body, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ data: [{ id: 'some-model' }] }));
+    });
+    try {
+        const models = await client(base + '/messages').listModels();
+        assert.deepEqual(models.map(m => m.name), ['some-model']);
+        assert.equal(requests[0].url, '/v1/models');
+        assert.equal(requests[0].headers['x-api-key'], undefined, 'the key goes in no extra header for other hosts');
+    } finally { close(server); }
 });

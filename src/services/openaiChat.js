@@ -28,6 +28,22 @@ function isAllowedBaseUrl(text) {
     return u.protocol === 'https:' || (u.protocol === 'http:' && LOOPBACK.has(u.hostname));
 }
 
+/**
+ * The base URL the API paths go under. People often paste an endpoint
+ * instead (".../v1/chat/completions", or Anthropic's ".../v1/messages"),
+ * which turned "models" into ".../v1/messages/models" and a 404.
+ */
+function normalizeBaseUrl(text) {
+    return String(text || '').trim()
+        .replace(/\/+$/, '')
+        .replace(/\/(chat\/completions|completions|messages|models)$/i, '');
+}
+
+// Anthropic's OpenAI-compatible API takes the bearer token for chat, but its
+// model list wants its own headers.
+const ANTHROPIC_HOST = 'api.anthropic.com';
+const ANTHROPIC_VERSION = '2023-06-01';
+
 /** 9 letters/digits: Mistral rejects other tool call ids. */
 const makeId = (n) => `call${String(n).padStart(5, '0')}`;
 
@@ -67,7 +83,8 @@ function createOpenAiClient({ baseUrl, apiKey, label = 'The provider' }) {
     if (!isAllowedBaseUrl(baseUrl)) {
         throw new Error('The base URL must start with https:// (plain http only for a server on this PC).');
     }
-    const base = new URL(String(baseUrl).replace(/\/+$/, '') + '/');
+    const base = new URL(normalizeBaseUrl(baseUrl) + '/');
+    const anthropic = base.hostname === ANTHROPIC_HOST;
     const scrub = (text) => (apiKey ? String(text).split(apiKey).join('[key]') : String(text));
 
     function httpError(status, text) {
@@ -107,6 +124,7 @@ function createOpenAiClient({ baseUrl, apiKey, label = 'The provider' }) {
                 method,
                 headers: {
                     Authorization: `Bearer ${apiKey}`,
+                    ...(anthropic ? { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION } : {}),
                     Accept: onLine ? 'text/event-stream' : 'application/json',
                     ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': payload.length } : {}),
                 },
@@ -215,4 +233,4 @@ function createOpenAiClient({ baseUrl, apiKey, label = 'The provider' }) {
     return { listModels, chat };
 }
 
-module.exports = { createOpenAiClient, toOpenAiMessages, isAllowedBaseUrl };
+module.exports = { createOpenAiClient, toOpenAiMessages, isAllowedBaseUrl, normalizeBaseUrl };
