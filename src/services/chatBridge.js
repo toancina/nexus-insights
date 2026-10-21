@@ -13,7 +13,7 @@
  * take a URL from the window, so a script there can't send the key elsewhere.
  */
 
-const { createOpenAiClient, isAllowedBaseUrl } = require('./openaiChat');
+const { createOpenAiClient, isAllowedBaseUrl, normalizeBaseUrl } = require('./openaiChat');
 const { PROVIDERS } = require('./chatProviders');
 
 const KEY_PATTERN = /^\S{8,512}$/;
@@ -40,7 +40,7 @@ function createChatBridge({ store, providers = PROVIDERS, createClient = createO
         }
         let url = p.baseUrl;
         if (!url) {
-            url = typeof baseUrl === 'string' ? baseUrl.trim().replace(/\/+$/, '') : '';
+            url = typeof baseUrl === 'string' ? normalizeBaseUrl(baseUrl) : '';
             if (!url) throw new Error('Enter the base URL of the API, for example https://api.openai.com/v1.');
             if (!isAllowedBaseUrl(url)) throw new Error('The base URL must start with https:// (plain http only for a server on this PC).');
         }
