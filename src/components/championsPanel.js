@@ -107,7 +107,7 @@ function renderList(rows) {
     return `<table class="ch-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function rateTable(title, rows, cellsOf, empty) {
+function rateTable(title, firstCol, rows, cellsOf, empty) {
     const body = rows.length ? rows.map(r => `
         <tr class="${r.games < LOW_SAMPLE ? 'is-low' : ''}">
             <td>${cellsOf(r)}</td>
@@ -119,7 +119,7 @@ function rateTable(title, rows, cellsOf, empty) {
         <div class="ch-card">
             <div class="ch-card-title">${title}</div>
             <table class="ch-subtable">
-                <thead><tr><th></th><th class="num">Games</th><th class="num">Pick</th><th class="num">Win rate</th></tr></thead>
+                <thead><tr><th>${firstCol}</th><th class="num">Games</th><th class="num">Pick</th><th class="num">Win rate</th></tr></thead>
                 <tbody>${body}</tbody>
             </table>
         </div>`;
@@ -252,10 +252,10 @@ function renderDetail(matches) {
         </div>
         ${roleChips}
         <div class="ch-cards">
-            ${rateTable('Rune pages', d.runes.slice(0, 6), r =>
+            ${rateTable('Rune pages', 'Rune page', d.runes.slice(0, 6), r =>
                 `<div class="ch-cellrow">${runeIcon(r.keystone)}${runeIcon(r.secondary, 'ch-rune ch-rune--sm')}
                     <span>${escapeHtml(runeName(r.keystone))}</span></div>`, 'No rune data')}
-            ${rateTable('Core items', d.items.slice(0, 8), i =>
+            ${rateTable('Core items', 'Item', d.items.slice(0, 8), i =>
                 `<div class="ch-cellrow">${itemIcon(i.itemId)}<span>${escapeHtml(itemName(i.itemId))}</span></div>`, 'No finished items')}
             ${renderBuildOrder(matches, d.champion, d.role)}
             ${renderMatchups(d)}
