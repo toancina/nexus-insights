@@ -897,23 +897,29 @@ body.has-top-bar .top-bar { display: block; }
 }
 
 /* ==========================================================================
-   Coaching layout: one column on narrow windows (rank, report, habits,
-   trends, details); on wide ones the habits move to a right-hand column so
-   they stay beside the report while you step through games.
+   Coaching tabs (#98): the rank strip, then Game Report / Habits / Trends,
+   one at a time and full width. The tab row reuses the Analytics sub-tab
+   look (.analytical-tabs-container / .analytical-tab); each button adds a
+   one-line summary under its name.
    ========================================================================== */
-.coach-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "rank" "report" "habits" "trends" "details";
-    column-gap: var(--s5);
+.coach-tabs { margin: var(--gutter) 0; }
+.coach-tab {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 8px 16px;
 }
-.coach-slot-rank    { grid-area: rank; }
-.coach-slot-report  { grid-area: report; }
-.coach-slot-habits  { grid-area: habits; }
-.coach-slot-trends  { grid-area: trends; }
-.coach-slot-details { grid-area: details; }
+.coach-tab-label { font-size: 13px; }
+.coach-tab-sum {
+    font-size: var(--t-small); font-weight: 500;
+    color: var(--text-tertiary);
+}
+.coach-tab-sum:empty { display: none; }
+.coach-tab-sum.good { color: #4ade80; }
+.coach-tab-sum.bad  { color: #f87171; }
+.coach-tab:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.coach-tab-hint { margin: 0 0 var(--s2); font-size: var(--t-small); }
+#coaching-panel-content .coach-panel > .coach-section-label:first-child { margin-top: 0; }
 
-/* Slim rank strip: one card-height less than the old header */
+/* Slim rank strip */
 .coach-rank { padding: var(--s2) var(--s4); gap: var(--s3); }
 .coach-rank-emblem { width: 44px; height: 44px; }
 .coach-rank-info { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--s3); row-gap: 2px; }
@@ -921,26 +927,6 @@ body.has-top-bar .top-bar { display: block; }
 .coach-rank-title { font-size: 18px; margin: 0; }
 
 @media (min-width: 1400px) {
-    .coach-layout {
-        grid-template-columns: minmax(0, 1fr) 400px;
-        /* the last row is flexible, so a tall habits column grows it
-           instead of pulling the report and trends apart */
-        grid-template-rows: auto auto auto auto 1fr;
-        grid-template-areas:
-            "rank    habits"
-            "report  habits"
-            "trends  habits"
-            "details habits"
-            ".       habits";
-    }
-    .coach-slot-habits { align-self: start; }
-
-    /* Habits as one list grouped by status instead of four columns */
-    .coach-slot-habits .coach-board { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
-    .coach-slot-habits .coach-col { min-height: 0; padding: 8px; gap: 6px; }
-    .coach-slot-habits .coach-ticket { padding: 6px 10px; }
-    .coach-slot-habits .coach-ticket-meta { margin-top: 1px; }
-
     /* Report: general and role tiles on one row, a wider gap between the groups */
     #coachReport .coach-tiles {
         grid-template-columns: repeat(4, minmax(0, 1fr)) 0 repeat(4, minmax(0, 1fr));
@@ -953,12 +939,6 @@ body.has-top-bar .top-bar { display: block; }
         min-height: 2.5em; line-height: 1.25;
         display: flex; align-items: center; justify-content: center;
     }
-
-    /* Habits heading: the hint goes under the title in the narrow column,
-       level with the rank strip beside it */
-    .coach-slot-habits .coach-section-label { flex-wrap: wrap; row-gap: 2px; }
-    #coaching-panel-content .coach-slot-habits .coach-section-label:first-child { margin-top: 0; }
-    .coach-slot-habits .coach-section-label .coach-dim { flex-basis: 100%; }
 }
 
 /* A dialog is open: the page doesn't scroll behind it (#63) */

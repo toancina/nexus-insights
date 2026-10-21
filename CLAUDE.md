@@ -153,7 +153,7 @@ src/
   - LP Progression line charts (Canvas) for Solo/Duo and Flex
   - Time-insight mini-cards: Best Time of Day, Best Day of Week, Session Stamina (games 1-3/4-6/7+), Win/Loss Streaks
 - **Match History page**: the match table, filtered by the top bar, paginated with "Load 50 More / Load All"
-- **Coaching tab**: Solo/Duo only. Rank header, last-game report (‹ › to step back), habit board (tickets in Slipping / Needs work / Improving / On track, click for detail), area trends with sparklines, collapsed Details. See "Coaching page (rewritten 2026-10)" below.
+- **Coaching tab**: Solo/Duo only. Rank header, then three tabs (#98), one shown at a time: Game Report (‹ › to step back), Habits (tickets in Slipping / Needs work / Improving / On track, click for detail), Trends (area trends with sparklines, then collapsed Details). See "Coaching page (rewritten 2026-10)" below.
 - **Match table**: no Result column (the row colour says win/loss; MVP/SVP sits next to the champion). KDA is (K + A) / max(1, D) everywhere: no "Perfect".
 - **Expanded Match Rows**: clicking a match-table row expands an inline game timeline chart, a game report (#9) (win chance / gold lead / XP lead with event markers) and a full 10-player breakdown (both teams): team impact rank with MVP/SVP, items, runes, summoner spells, KDA, CS/min, damage, GD@15/XPD@15, pings, tower damage. Badge awards shown at the top. (The old full-screen Match Detail Modal was removed 2026-07 — it had become unreachable.)
 - **Setup Modal**: First-run flow — API key (password field), Summoner Name # Tag, Server (select; Region is derived from it and shown disabled), checked against Riot on Save (#74). Accessible anytime via the settings button.
@@ -1371,6 +1371,16 @@ Solo/Duo only, organised around "am I improving game to game?". Uses
 `window.matchesData` (remakes excluded) — **not** its own DB query any more —
 and re-renders on every open.
 
+- **Tabs (#98):** the rank strip, then a tab row (the Analytics sub-tab
+  look) with **Game Report**, **Habits** and **Trends** (+ Details); only the
+  picked one is shown (`hidden` on `[data-coach-panel]`, all three are
+  rendered so the partial redraws by id keep working). Each button has a
+  summary: the latest game's result + LP, `N slipping` / `N need work` /
+  `All on track`, `N improving · N slipping` / `Steady` (redrawn with the
+  trend switches). The tab is remembered in localStorage
+  (`nexus.coachingTab`), first visit = Game Report; arrow keys move
+  between tabs. The two-column wide layout from #86 is gone: each tab is
+  full width.
 - `components/coachingProgress.js` (pure, tested): `rankHeader` (W-L + LP over
   last 10 via `window.lpDeltas`), `lastGameReport` (one game vs the 20 before
   it, ‹ › steps back), `focusHits` (focus metric hit/missed per game, last 10 vs
