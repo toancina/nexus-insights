@@ -400,36 +400,26 @@ function addUserBubble(text) {
     scrollToBottom();
 }
 
-/** Assistant bubble with an activity strip (tool lookups) and the answer body. */
+/** Assistant bubble: typing dots, then the answer. Tool lookups and thinking aren't shown. */
 function addAssistantBubble() {
     const box = $('chatMessages');
     const el = document.createElement('div');
     el.className = 'chat-msg chat-msg--bot';
     el.innerHTML = `
         <div class="chat-bubble">
-            <div class="chat-activity"></div>
             <div class="chat-body"><span class="chat-typing"><i></i><i></i><i></i></span></div>
         </div>`;
     box.appendChild(el);
     scrollToBottom();
     return {
-        activity: el.querySelector('.chat-activity'),
         body: el.querySelector('.chat-body'),
         root: el,
     };
 }
 
-function addToolLine(activity, label) {
-    const line = document.createElement('div');
-    line.className = 'chat-tool';
-    line.textContent = `🔎 Looked up ${label}`;
-    activity.appendChild(line);
-}
-
 /** A saved answer, drawn as it looked when it came in. */
 function addAnswer(msg) {
     const ui = addAssistantBubble();
-    for (const label of msg.tools || []) addToolLine(ui.activity, label);
     ui.body.innerHTML = renderMarkdown(msg.content);
 }
 
@@ -580,7 +570,7 @@ async function send(rawText) {
     addUserBubble(text);
     const ui = addAssistantBubble();
     setBusy(true);
-    setStatus('working', 'Thinking…');
+    setStatus('working', 'Working…');
 
     const chat = state.chat;    // another chat may be opened before the answer is in
     const ctx = toolContext();
@@ -622,12 +612,7 @@ async function send(rawText) {
                     streamed = '';
                     ui.body.innerHTML = '<span class="chat-typing"><i></i><i></i><i></i></span>';
                 } else if (ev.type === 'tool') {
-                    lookedUp.push(ev.label);
-                    addToolLine(ui.activity, ev.label);
-                    setStatus('working', 'Looking things up…');
-                    scrollToBottom();
-                } else if (ev.type === 'thinking') {
-                    setStatus('working', 'Thinking harder…');
+                    lookedUp.push(ev.label);    // kept with the saved chat, not shown
                 }
             },
         });

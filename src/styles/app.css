@@ -5958,9 +5958,6 @@ body {
     background: var(--bg-card); border: 1px solid var(--border-primary);
     border-bottom-left-radius: 4px;
 }
-.chat-activity:empty { display: none; }
-.chat-activity { margin-bottom: 8px; display: flex; flex-direction: column; gap: 2px; }
-.chat-tool { font-size: var(--font-xs); color: var(--text-tertiary); }
 
 .chat-body p { margin: 0 0 8px; }
 .chat-body p:last-child, .chat-body ul:last-child, .chat-body ol:last-child, .chat-body table:last-child { margin-bottom: 0; }
