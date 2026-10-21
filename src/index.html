@@ -229,17 +229,9 @@
                         <!-- Cards will be dynamically inserted here -->
                     </div>
 
-                    <!-- Roles table, Overview only — components/roleBreakdown.js -->
-                    <div class="role-breakdown" id="roleBreakdown" hidden></div>
-
-                    <!-- Death map, Death Review only — components/deathMapPanel.js -->
-                    <div class="death-map" id="deathMap" hidden></div>
-
-                    <!-- Gold/XP gap to the lane opponent per minute, Lane Phase only — components/laneGapChart.js -->
-                    <div class="lane-gap" id="laneGapChart" hidden></div>
-
                     <!-- Stat history: slides open when a card with a green dot is
-                         clicked. One point per month, last 12 months, current filters.
+                         clicked, right under the cards (#93). One point per month,
+                         last 12 months, current filters.
                          Driven by components/statHistory.js -->
                     <div class="stat-history-panel" id="statHistoryPanel" aria-hidden="true">
                         <div class="stat-history-clip">
@@ -263,6 +255,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Roles table, Overview only — components/roleBreakdown.js -->
+                    <div class="role-breakdown" id="roleBreakdown" hidden></div>
+
+                    <!-- Death map, Death Review only — components/deathMapPanel.js -->
+                    <div class="death-map" id="deathMap" hidden></div>
+
+                    <!-- Gold/XP gap to the lane opponent per minute, Lane Phase only — components/laneGapChart.js -->
+                    <div class="lane-gap" id="laneGapChart" hidden></div>
 
                     <!-- Hidden Persistent Rank Container -->
                     <div id="persistentRankCards" style="display: none;">

@@ -565,8 +565,8 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
 
 ### Stat history chart (click a card) — 2026-10
 
-Cards with a green dot open a slide-down chart (`#statHistoryPanel`, between
-the card grid and Time Analytics) showing that stat **per month for the last 12
+Cards with a green dot open a slide-down chart (`#statHistoryPanel`, directly
+under the card grid, above the Roles table / death map / lane gap chart, #93) showing that stat **per month for the last 12
 calendar months, ending with the current month** (current month = "so far").
 
 - `components/statHistory.js`. Each month's value comes from running
