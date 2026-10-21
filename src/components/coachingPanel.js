@@ -1,15 +1,17 @@
 /**
  * coachingPanel.js — the Coaching page (rewritten 2026-10).
  *
- * Organised around "am I improving, game to game?", Solo/Duo only:
+ * Organised around "am I improving, game to game?", Solo/Duo only. The rank
+ * header is always shown; under it, three tabs show one view at a time (#98).
+ * The last tab picked is remembered, and each button carries a one-line summary:
  *
  *   1. Rank header     rank + LP and W-L over the last 10 games
- *   2. Last game       one game vs. your previous 20, with ‹ › to step back
- *   3. Habit board     one ticket per habit in Slipping / Needs work /
+ *   2. Game Report     one game vs. your previous 20, with ‹ › to step back
+ *   3. Habits          one ticket per habit in Slipping / Needs work /
  *                      Improving / On track (worst to best), moved by your last
  *                      10 games vs. the 10 before; click one for its detail (#61)
- *   4. Trends          each Analytics area, last 10 vs. the 10 before
- *   5. Details         outcome evidence (collapsed)
+ *   4. Trends          each Analytics area, last 10 vs. the 10 before, then
+ *                      Details: outcome evidence (collapsed)
  *
  * Data: the same rows the Analytics page uses (window.matchesData, remakes
  * excluded), and every number comes from the Analytics engine via
@@ -35,8 +37,42 @@
     const signed = v => (v > 0 ? '+' : '') + Math.round(v);
     const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
 
-    // Page state survives re-renders so ‹ › and "Details" don't reset.
-    const state = { games: [], index: null, lastCount: 0, detailsOpen: false, board: null, moves: {}, openTicket: null };
+    // The three views under the rank header (#98); the picked one is remembered on this PC
+    const TABS = [['report', 'Game Report'], ['habits', 'Habits'], ['trends', 'Trends']];
+    const TAB_KEY = 'nexus.coachingTab';
+    function savedTab() {
+        try {
+            const t = localStorage.getItem(TAB_KEY);
+            return TABS.some(([id]) => id === t) ? t : 'report';
+        } catch { return 'report'; }
+    }
+
+    // Page state survives re-renders so ‹ ›, the tab and "Details" don't reset.
+    const state = { games: [], index: null, lastCount: 0, detailsOpen: false, board: null, moves: {}, openTicket: null, tab: savedTab() };
+
+    window.coachingShowTab = function (tab) {
+        if (!TABS.some(([id]) => id === tab)) return;
+        state.tab = tab;
+        try { localStorage.setItem(TAB_KEY, tab); } catch { /* remembered for this run only */ }
+        document.querySelectorAll('[data-coach-tab]').forEach(btn => {
+            const on = btn.dataset.coachTab === tab;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-selected', String(on));
+            btn.tabIndex = on ? 0 : -1;
+        });
+        document.querySelectorAll('[data-coach-panel]').forEach(p => { p.hidden = p.dataset.coachPanel !== tab; });
+    };
+
+    // Arrow keys move between the tabs, as in any tab list
+    window.coachingTabKey = function (event) {
+        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+        if (!step) return;
+        event.preventDefault();
+        const i = TABS.findIndex(([id]) => id === state.tab);
+        const next = TABS[(i + step + TABS.length) % TABS.length][0];
+        window.coachingShowTab(next);
+        document.getElementById(`coachTab-${next}`)?.focus();
+    };
 
     window.coachingToggleDetails = function () {
         state.detailsOpen = !state.detailsOpen;
@@ -302,7 +338,10 @@
     function redrawTrends(allTabs) {
         const el = document.getElementById('coachTrends');
         if (el && state.games.length) {
-            el.innerHTML = renderTrends(Progress.areaTrends(state.games, window.computeTabStats, 30, { all: allTabs }));
+            const areas = Progress.areaTrends(state.games, window.computeTabStats, 30, { all: allTabs });
+            el.innerHTML = renderTrends(areas);
+            const sum = document.getElementById('coachTabSum-trends');
+            if (sum) sum.outerHTML = tabSummary('trends', trendsSummary(areas));
         }
     }
 
@@ -391,6 +430,53 @@
         </div>`;
     }
 
+    // ── Tab buttons ──────────────────────────────────────────────────────────
+    // One short line per tab, so a problem isn't hidden behind a closed tab.
+    function reportSummary(games) {
+        const g = games[games.length - 1];
+        const lp = lpText((window.lpDeltas || {})[g.matchId]);
+        return { text: `${g.win ? 'Win' : 'Loss'}${lp ? ' ' + lp : ''}`, cls: g.win ? 'good' : 'bad' };
+    }
+
+    function habitsSummary(board) {
+        const count = id => (board.columns.find(c => c.id === id) || { tickets: [] }).tickets.length;
+        const slipping = count('slipping'), needs = count('needs');
+        if (!board.tickets.length) return { text: 'Not placed yet', cls: '' };
+        if (slipping) return { text: `${slipping} slipping`, cls: 'bad' };
+        if (needs)    return { text: `${needs} need${needs === 1 ? 's' : ''} work`, cls: '' };
+        return { text: 'All on track', cls: 'good' };
+    }
+
+    function trendsSummary(areas) {
+        if (!areas.length) return { text: '', cls: '' };
+        const up = areas.filter(a => a.verdict === 'improving').length;
+        const down = areas.filter(a => a.verdict === 'slipping').length;
+        const parts = [up ? `${up} improving` : '', down ? `${down} slipping` : ''].filter(Boolean);
+        return { text: parts.join(' · ') || 'Steady', cls: down > up ? 'bad' : up > down ? 'good' : '' };
+    }
+
+    function tabSummary(id, sum) {
+        return `<span class="coach-tab-sum${sum.cls ? ' ' + sum.cls : ''}" id="coachTabSum-${id}">${escapeHtml(sum.text)}</span>`;
+    }
+
+    function renderTabs(summaries) {
+        return `
+        <div class="analytical-tabs-container coach-tabs" role="tablist" aria-label="Coaching views">
+          ${TABS.map(([id, label]) => `
+          <button class="analytical-tab coach-tab${state.tab === id ? ' active' : ''}" role="tab" type="button"
+                  id="coachTab-${id}" data-coach-tab="${id}" aria-controls="coachPanel-${id}"
+                  aria-selected="${state.tab === id}" tabindex="${state.tab === id ? 0 : -1}"
+                  onclick="coachingShowTab('${id}')" onkeydown="coachingTabKey(event)">
+            <span class="coach-tab-label">${label}</span>${tabSummary(id, summaries[id])}
+          </button>`).join('')}
+        </div>`;
+    }
+
+    function panel(id, html) {
+        return `<section class="coach-panel" id="coachPanel-${id}" data-coach-panel="${id}" role="tabpanel"
+                         aria-labelledby="coachTab-${id}"${state.tab === id ? '' : ' hidden'}>${html}</section>`;
+    }
+
     // ── Entry point ──────────────────────────────────────────────────────────
     window.renderCoachingPanel = async function () {
         const container = document.getElementById('coaching-panel-content');
@@ -444,28 +530,21 @@
 
             const areas = Progress.areaTrends(games, window.computeTabStats, 30, { all: trendsAll() });
 
-            // Wide windows: two columns, habits on the right (polish.css .coach-layout)
+            // Rank strip, then one view at a time: Game Report / Habits / Trends (#98)
             container.innerHTML = `
-              <div class="coach-layout">
-                <section class="coach-slot-rank">${renderHeader(games, reading, result.roleLabel)}</section>
+              ${renderHeader(games, reading, result.roleLabel)}
+              ${renderTabs({ report: reportSummary(games), habits: habitsSummary(board), trends: trendsSummary(areas) })}
 
-                <section class="coach-slot-report">
-                  <div class="coach-section-label">Game by game</div>
-                  ${renderReport()}
-                </section>
+              ${panel('report', renderReport())}
 
-                <aside class="coach-slot-habits">
-                  <div class="coach-section-label">Your habits <span class="coach-dim">— worst to best, last 10 games vs. the 10 before · click one for details</span></div>
-                  <div id="coachBoard">${renderBoard(board, state.moves)}</div>
-                </aside>
+              ${panel('habits', `
+                <p class="coach-tab-hint coach-dim">Worst to best, from your last 10 games vs. the 10 before · click one for details</p>
+                <div id="coachBoard">${renderBoard(board, state.moves)}</div>`)}
 
-                <section class="coach-slot-trends">
-                  <div class="coach-section-label">Trends <span class="coach-dim">— last 10 games vs. the 10 before, or flip a switch for all your Solo/Duo games · click one to open it in Analytics</span></div>
-                  <div id="coachTrends">${renderTrends(areas)}</div>
-                </section>
-
-                <section class="coach-slot-details">${renderDetails(result)}</section>
-              </div>`;
+              ${panel('trends', `
+                <p class="coach-tab-hint coach-dim">Last 10 games vs. the 10 before, or flip a switch for all your Solo/Duo games · click one to open it in Analytics</p>
+                <div id="coachTrends">${renderTrends(areas)}</div>
+                ${renderDetails(result)}`)}`;
         } catch (err) {
             container.innerHTML = `<div class="coach-empty error">Error: ${escapeHtml(err.message)}</div>`;
             console.error('[CoachingPanel]', err);
