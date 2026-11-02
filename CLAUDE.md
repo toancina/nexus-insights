@@ -289,6 +289,16 @@ DB path: `%APPDATA%/nexus-insights/nexus_data.sqlite`
   existed, since Chat's "all queues" counted them (#68). `computeTeamImpact`
   returns no ranks unless a game has exactly 10 players.
 - **Rate limiting**: Sequential processing, 150ms delay between every API call
+- **Automatic syncs** (renderer.js): the live watcher (`pollLiveClient`,
+  Live Client Data API) sees a game end and `handleGameEnded` syncs on a
+  widening schedule (`POST_GAME_RETRY_MS`, ~1 h in all; a "slow" toast
+  after ~7.5 min). It stops when the game lands, is already stored (a
+  game with `gameCreation` from 5 min before the watcher saw it), a new
+  game starts, or the key is rejected (`keyError` from `handleSync`).
+  The watcher only sees games while the app runs, so start-up also runs
+  `catchUpSync` (`handleSync({ catchUp: true })`, after the background
+  indexing; skipped with no games stored or a sync running) for games
+  played while the app was closed.
 - **Sync button** (#75): no fixed lockout after a sync; the limiter paces
   every call. It counts down only after a 429 the limiter couldn't absorb
   (`rateLimitWaitSeconds`: Riot's Retry-After, else 120 s). A click or Fill
