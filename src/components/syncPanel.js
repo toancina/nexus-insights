@@ -15,7 +15,7 @@ const {
 } = require('../services/matchService');
 const { loadConfig } = require('../services/config');
 const { formatInt } = require('./dom');
-const { friendlyRiotError, rateLimitWaitSeconds } = require('../services/riotErrors');
+const { friendlyRiotError, isKeyError, rateLimitWaitSeconds } = require('../services/riotErrors');
 
 // Only after a 429 the rate limiter couldn't absorb (#75): every call goes
 // through riotApi's limiter, so a sync that wasn't rate limited leaves the
@@ -119,7 +119,9 @@ function hideProgress() {
  * @param {boolean} [options.fillGaps] Settings → Fill gaps (#18).
  */
 window.handleSync = async function (options = {}) {
-    const auto   = options.auto === true;
+    // catchUp: the sync at app start, for games played while the app was closed
+    const catchUp = options.catchUp === true;
+    const auto   = options.auto === true || catchUp;
     // Always the configured account: the top bar only shows it (#73). Typing
     // someone else's Riot ID there used to store their games as yours.
     const config = loadConfig();
@@ -205,7 +207,12 @@ window.handleSync = async function (options = {}) {
         const advancedMsg = advancedResult.total  > 0 ? `, ${formatInt(advancedResult.updated)} stats computed`   : '';
         const computedMsg = computedResult.total  > 0 ? `, ${formatInt(computedResult.done)} matches indexed`     : '';
         const timelineMsg = backfillResult.total   > 0 ? `, ${formatInt(backfillResult.updated)} timelines added`  : '';
-        if (auto) {
+        if (catchUp) {
+            updateStatus('success', 'Up to Date',
+                result.newMatches > 0
+                    ? `${formatInt(result.newMatches)} game${result.newMatches === 1 ? '' : 's'} played while the app was closed added`
+                    : 'No games missed while the app was closed');
+        } else if (auto) {
             // Quieter wording — this one ran on its own, off the back of a
             // game the user just played.
             updateStatus('success', 'Game Logged',
@@ -265,7 +272,8 @@ window.handleSync = async function (options = {}) {
         // Riot still said "too many" after the limiter's retries: wait as told
         const wait = rateLimitWaitSeconds(err);
         if (wait && !auto) startSyncCooldown(wait);
-        return { newMatches: 0, error: errorMessage };
+        // keyError: retrying can't help until the key is replaced
+        return { newMatches: 0, error: errorMessage, keyError: isKeyError(err) };
     } finally {
         window.isSyncing = false;
         if (!syncCooldownInterval) setButtonLoading(false);

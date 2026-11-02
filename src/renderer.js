@@ -455,6 +455,12 @@ let lpFallbackTimer = null;
 let livePollBusy    = false;
 let wasInGame       = false;
 let pendingEndTimer = null;
+let gameSeenAt      = 0;      // when the watcher first saw the running game
+
+// gameCreation is the start of the loading screen, a few minutes before the
+// watcher sees the game. A stored game this close to that moment is the one
+// just played.
+const SAME_GAME_MARGIN_MS = 5 * 60 * 1000;
 
 /**
  * Read LP for both queues and persist anything that moved.
@@ -499,17 +505,25 @@ window.captureLpReadings = captureLpReadings;
  * A game just ended — pull it in and work out what it cost or earned.
  *
  * Riot publishes a match to Match-V5 some time after the client leaves it, and
- * how long is not guaranteed: usually under a minute, occasionally several.
- * A single attempt would silently give up whenever the match was slow, leaving
- * the game missing until the next manual sync — so this retries on a widening
- * schedule and stops as soon as the match lands.
+ * how long is not guaranteed: usually under a minute, occasionally several,
+ * now and then much longer. A single attempt would silently give up whenever
+ * the match was slow, leaving the game missing until the next manual sync —
+ * so this retries on a widening schedule for about an hour and stops as soon
+ * as the match lands, a new game starts, or the API key is rejected.
  */
-const POST_GAME_RETRY_MS = [45, 45, 60, 120, 180].map(s => s * 1000);
+const POST_GAME_RETRY_MS = [45, 45, 60, 120, 180, 300, 600, 900, 1200].map(s => s * 1000);
+// After this many tries (~7.5 min) say it's slow, once, and keep checking
+const POST_GAME_SLOW_AFTER = 5;
 
 async function handleGameEnded() {
     if (window.isSyncing) return;
 
     const wait = ms => new Promise(r => { pendingEndTimer = setTimeout(r, ms); });
+
+    const startedAt = gameSeenAt;
+    // Already stored (a manual Sync got there first): stop checking
+    const stored = () => startedAt > 0 &&
+        (window.matchesData || []).some(m => m.gameCreation >= startedAt - SAME_GAME_MARGIN_MS);
 
     try {
         showToast('Game Over', 'Fetching the result…', 3000);
@@ -520,12 +534,14 @@ async function handleGameEnded() {
 
             // A new game starting means the last one is stale news — the next
             // game-end will pick it up along with everything else.
-            if (wasInGame) return;
+            if (wasInGame || stored()) return;
 
             let found = 0;
             if (typeof window.handleSync === 'function') {
                 const res = await window.handleSync({ auto: true });
                 found = (res && res.newMatches) || 0;
+                // An expired key fails every retry; sync's status already says so
+                if (res && res.keyError) return;
             }
 
             await captureLpReadings();
@@ -535,11 +551,14 @@ async function handleGameEnded() {
                 return;
             }
             console.log(`Match not published yet (attempt ${attempt + 1}/${POST_GAME_RETRY_MS.length})`);
+            if (attempt + 1 === POST_GAME_SLOW_AFTER) {
+                showToast('Still Waiting', 'Riot is slow to publish that match. The app keeps checking for about an hour.', 6000);
+            }
         }
 
-        // ~7.5 minutes and still nothing. Rare, but say so rather than leave
+        // About an hour and still nothing. Rare, but say so rather than leave
         // the user assuming it was logged.
-        showToast('Still Waiting', 'Riot hasn\'t published that match yet — press Sync in a few minutes', 6000);
+        showToast('Not Published Yet', 'Riot still hasn\'t published that match. Press Sync later; the next game also picks it up.', 8000);
     } catch (err) {
         console.warn('Post-game update failed:', err.message);
     } finally {
@@ -561,6 +580,7 @@ async function pollLiveClient() {
 
         if (inGame && !wasInGame) {
             wasInGame = true;
+            gameSeenAt = Date.now();
             console.log('Live client: game started');
             // "Before" reading, so the next one has something to measure from.
             captureLpReadings({ quiet: true }).catch(e => console.warn('Pre-game LP read failed:', e.message));
@@ -1313,14 +1333,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // One-time indexing of matches synced before the precomputed analytics
     // columns existed. Runs in the background so it never blocks the UI, and
-    // is a no-op on every launch after the first.
-    if (configValid) backfillAnalyticsInBackground();
+    // is a no-op on every launch after the first. Then a quiet catch-up sync
+    // for games played while the app was closed (the game-end watcher only
+    // sees games while it runs); after the indexing, so the two don't index
+    // the same rows at once.
+    if (configValid) backfillAnalyticsInBackground().then(catchUpSync);
 
     // Watch LP while the app is open. This is what makes per-match LP possible
     // at all — Riot exposes no history, so the readings have to be collected
     // as they happen.
     if (configValid) window.startLpWatcher();
 });
+
+/**
+ * Sync once at start-up, so games played while the app was closed show up
+ * without pressing Sync. Skipped on a first run (Settings starts that sync)
+ * and while a game is running (the game-end watcher will sync after it).
+ */
+async function catchUpSync() {
+    if (!(window.matchesData || []).length || wasInGame || window.isSyncing) return;
+    try {
+        if (typeof window.handleSync === 'function') await window.handleSync({ catchUp: true });
+    } catch (err) {
+        console.warn('Start-up catch-up sync failed:', err.message);
+    }
+}
 
 async function backfillAnalyticsInBackground() {
     try {
