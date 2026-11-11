@@ -1302,3 +1302,19 @@ body.modal-open .page-scroll { overflow: hidden; }
 /* Coaching: the fetched players' values under a tile / a Trends card (sample games) */
 .coach-tile-groups, .coach-area-groups { margin-top: var(--s1); font-size: var(--t-small, 12px); line-height: 1.4; }
 .coach-tile-groups b, .coach-area-groups b { font-weight: 600; color: var(--text-primary, inherit); }
+
+/* Champions page: download sample games for a champion outside your top 3 */
+.ch-sample-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); margin: 0 0 var(--s3); }
+.ch-sample-btn {
+    background: rgba(var(--accent-rgb), 0.14);
+    border: 1px solid rgba(var(--accent-rgb), 0.45);
+    color: var(--accent-primary);
+    border-radius: var(--r-ctl, 6px);
+    padding: 6px 12px;
+    font: inherit;
+    font-size: var(--t-small, 12px);
+    cursor: pointer;
+}
+.ch-sample-btn:hover:not(:disabled) { background: rgba(var(--accent-rgb), 0.24); }
+.ch-sample-btn:disabled { opacity: 0.55; cursor: default; }
+.ch-sample-bar .ch-note { margin: 0; }

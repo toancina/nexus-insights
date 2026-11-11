@@ -24,8 +24,12 @@ const { buildModel, needsRefit, MIN_GAMES } = require('../services/winModel');
 const loader = createSampleLoader({ api: riotApi, store: sampleStore, statsOf: statsRowFor });
 const holds = new Set();
 let running = null;
-let runAgain = false;
 let progress = '';
+// Queued downloads: null = your top 3 champions (after a sync), [name] = one
+// champion asked for from the Champions page
+const requests = [];
+let current = null;                 // the request being downloaded
+let lastChampionRun = null;         // { name, found, stopped, message, stored } of the last button run
 
 window.sampleRows = [];
 window.sampleGroupsNow = [];
@@ -121,10 +125,10 @@ window.pruneSampleGames = async function () {
     try { await sampleStore.prune(Date.now()); } catch (err) { console.warn('Pruning sample games failed:', err.message); }
 };
 
-async function downloadOnce() {
+async function downloadOnce(asked = null) {
     const groups = await currentGroups();
     const list = getChampionList();
-    const champions = topChampions(window.matchesData || [])
+    const champions = (asked || topChampions(window.matchesData || []))
         .map(name => ({ name, key: championKeyOf(name, list) }))
         .filter(c => c.key != null);
 
@@ -137,44 +141,97 @@ async function downloadOnce() {
         outcome = await loader.run({
             champions, groups, selfPuuid,
             shouldStop: () => (!enabled() ? 'off' : holds.size ? [...holds][0] : null),
-            onProgress: (text) => { progress = text; renderStatus(); },
+            onProgress: (text) => {
+                progress = text;
+                renderStatus();
+                // The Champions page shows the progress of a download it asked for
+                const el = document.getElementById('chSampleStatus');
+                if (el && asked && asked.includes(el.dataset.champ)) el.textContent = text;
+            },
         });
     }
-    updateConfig({
-        sampleGamesLastRun: {
-            at: Date.now(), stopped: outcome.stopped || null, message: outcome.message || null,
-            found: outcome.found || {}, champions: champions.map(c => c.name),
-        },
-    });
-    console.log('Sample games:', outcome);
+    if (asked) {
+        lastChampionRun = { name: asked[0], found: outcome.found || {}, stopped: outcome.stopped || null,
+            message: outcome.message || null, stored: outcome.stored || 0 };
+    } else {
+        updateConfig({
+            sampleGamesLastRun: {
+                at: Date.now(), stopped: outcome.stopped || null, message: outcome.message || null,
+                found: outcome.found || {}, champions: champions.map(c => c.name),
+            },
+        });
+    }
+    console.log('Sample games:', asked || 'top 3', outcome);
+    return outcome;
 }
 
 /**
- * Start a download unless one is running; a request during a run starts
- * another one after it (a sync that paused the run asks for the next one).
+ * Queue a download and run the queue unless it's running. No argument: your
+ * top 3 champions (after every sync). { champions: [name] }: one champion,
+ * from its button on the Champions page. A run paused for your sync or a live
+ * game goes back to the front of the queue, and the sync's own request
+ * starts the queue again.
  */
-window.runSampleDownload = function () {
+window.runSampleDownload = function ({ champions = null } = {}) {
     if (!enabled()) return Promise.resolve();
-    if (running) { runAgain = true; return running; }
+    const key = r => (r ? r.join(',') : '');
+    if (!requests.some(r => key(r) === key(champions))) requests.push(champions);
+    if (running) return running;
     running = (async () => {
         try {
-            do {
-                runAgain = false;
-                if (holds.size) break;
-                await downloadOnce();
+            while (requests.length && enabled() && !holds.size) {
+                current = requests.shift();
+                const outcome = await downloadOnce(current);
+                if (outcome && outcome.stopped === 'paused') { requests.unshift(current); break; }
                 await window.loadSampleRows();
                 if (typeof window.maybeRefitWinModel === 'function') await window.maybeRefitWinModel();
-            } while (runAgain && enabled());
+                if (current && typeof window.refreshSamplePages === 'function') window.refreshSamplePages();
+            }
         } catch (err) {
             console.warn('Sample download failed:', err.message);
         } finally {
             running = null;
+            current = null;
             progress = '';
             renderStatus();
+            if (typeof window.refreshSamplePages === 'function') window.refreshSamplePages();
         }
     })();
     renderStatus();
     return running;
+};
+
+/** The Champions page's "Download sample games" button for one champion. */
+window.downloadSampleChampion = function (name) {
+    if (!enabled() || !name) return;
+    window.runSampleDownload({ champions: [name] });
+    if (typeof window.refreshSamplePages === 'function') window.refreshSamplePages();
+};
+
+/**
+ * What the Champions page shows next to a champion's button:
+ * { auto, busy, queued, text } (auto = one of your top 3, downloaded after every sync).
+ */
+window.sampleChampionState = function (name) {
+    const auto = topChampions(window.matchesData || []).includes(name);
+    const busy = !!(current && current.includes(name));
+    const queued = requests.some(r => r && r.includes(name));
+    let text = '';
+    if (busy) text = progress || 'Downloading…';
+    else if (queued) text = 'Waiting for the download that is running…';
+    else if (lastChampionRun && lastChampionRun.name === name) {
+        const r = lastChampionRun;
+        const groups = window.sampleGroupsNow || [];
+        if (r.stopped === 'no-champions') text = "This champion's Riot data isn't loaded yet; try again in a moment.";
+        else if (r.stopped && STOP_TEXT[r.stopped]) text = STOP_TEXT[r.stopped];
+        else if (r.stopped === 'error') text = `Download stopped: ${r.message || 'unknown error'}`;
+        else {
+            const short = groups.filter(g => (r.found[name] || {})[g.key] < PLAYERS_PER_GROUP)
+                .map(g => `found ${(r.found[name] || {})[g.key] || 0} of ${PLAYERS_PER_GROUP} ${g.label} players`);
+            text = `${r.stored} new game${r.stored === 1 ? '' : 's'}${short.length ? ` · ${short.join(', ')}` : ''}.`;
+        }
+    }
+    return { auto, busy, queued, text };
 };
 
 // ── The fitted win-chance curve ─────────────────────────────────────────────

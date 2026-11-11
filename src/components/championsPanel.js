@@ -36,6 +36,23 @@ function samplePool(matches, champion, role) {
     });
 }
 
+/**
+ * Your top 3 champions get sample games after every sync; any other champion
+ * gets a button to download them (components/sampleGames.js queues it).
+ */
+function sampleBar(pool, champion) {
+    if (!pool || typeof window.sampleChampionState !== 'function') return '';
+    const st = window.sampleChampionState(champion);
+    if (st.auto) return '';
+    const has = pool.counts.level + pool.counts.above > 0;
+    const idle = `Your top 3 champions are downloaded after every sync; other champions when you ask.`;
+    return `<div class="ch-sample-bar">
+        <button type="button" class="ch-sample-btn" data-sample-champ="${escapeHtml(champion)}"${st.busy || st.queued ? ' disabled' : ''}>
+            ${has ? 'Update sample games' : 'Download sample games'}</button>
+        <span class="ch-note" id="chSampleStatus" data-champ="${escapeHtml(champion)}">${escapeHtml(st.text || idle)}</span>
+    </div>`;
+}
+
 /** A WPA-style number with its luck margin: muted (no colour) when the margin includes 0. */
 function marginCell(value, margin, games, cls) {
     if (games < LOW_SAMPLE || !Number.isFinite(value)) return `<span class="${cls}">–</span>`;
@@ -286,6 +303,7 @@ function renderDetail(matches) {
         </div>
         ${roleChips}
         ${poolNote}
+        ${sampleBar(pool, d.champion)}
         <div class="ch-cards">
             ${rateTable('Rune pages', 'Rune page', runes.slice(0, 6), r =>
                 `<div class="ch-cellrow">${runeIcon(r.keystone)}${runeIcon(r.secondary, 'ch-rune ch-rune--sm')}
@@ -324,6 +342,11 @@ function wire() {
     if (!shell || shell.dataset.wired) return;
     shell.dataset.wired = '1';
     shell.addEventListener('click', (e) => {
+        const sampleBtn = e.target.closest('[data-sample-champ]');
+        if (sampleBtn) {
+            if (typeof window.downloadSampleChampion === 'function') window.downloadSampleChampion(sampleBtn.dataset.sampleChamp);
+            return;
+        }
         const sort = e.target.closest('th[data-sort]');
         const champ = e.target.closest('tr[data-champ]');
         const role = e.target.closest('[data-role]');

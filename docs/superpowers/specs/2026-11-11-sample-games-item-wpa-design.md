@@ -1,6 +1,12 @@
 # Sample games and a better item WPA — design
 
-Date: 2026-11-11 · Status: draft for approval · Builds on #89 (item WPA) and #90 (Next item)
+Date: 2026-11-11 · Status: built · Builds on #89 (item WPA) and #90 (Next item)
+
+> **Changed after release (2026-11-12, user):** 10 games per player (not 5).
+> Coaching has no "Build and runes" section; build and rune numbers stay on
+> the Champions page, and Coaching compares your stats (Game Report tiles,
+> Trends cards) with the fetched players'. Champions outside your top 3 get a
+> "Download sample games" button on the Champions page. See CLAUDE.md.
 
 ## Why
 
