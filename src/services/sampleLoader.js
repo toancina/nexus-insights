@@ -8,10 +8,14 @@
  *   2. Each listed player's mastery on every champion (one call per player,
  *      re-checked after 7 days).
  *   3. Per champion, the 5 players with the most mastery on it. For each, their
- *      Solo/Duo ids of the last 90 days, newest first: every id not handled
- *      yet costs one match call to see the champion; only games on that
- *      champion get the timeline call and are stored. 5 stored games or
- *      MAX_CHECKS_PER_PLAYER checks end a player.
+ *      Solo/Duo ids from 90 days ago up to just after they last played that
+ *      champion (mastery's lastPlayTime), newest first, so their games on it
+ *      come first even when they've played other champions since: every id
+ *      not handled yet costs one match call to see the champion; only games
+ *      on that champion get the timeline call and are stored. 5 stored games
+ *      or MAX_CHECKS_PER_PLAYER checks end a player. (Live check 2026-11-12:
+ *      ids up to "now" found 2 Yorick games in 67 checks; the top-mastery
+ *      Silver I Yorick players had last played him 26–46 days before.)
  *
  * `shouldStop()` is asked before every call; a reason pauses the run (your
  * sync or a live game comes first). A rejected key stops it. `api` and `store`
@@ -28,6 +32,8 @@ const MAX_PAGES = 3;
 const LIST_TTL_MS = DAY_MS;
 const MASTERY_TTL_MS = 7 * DAY_MS;
 const MAX_CHECKS_PER_PLAYER = 15;
+// lastPlayTime is around the game's start or end: take ids until 3 h after it
+const LAST_PLAY_SLACK_MS = 3 * 3600 * 1000;
 const SOLO_QUEUE = 420;
 const ITEMS = ['item0', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6'];
 
@@ -145,16 +151,19 @@ function createSampleLoader({ api, store, now = Date.now }) {
         }
 
         const idsCache = new Map();
-        async function gamesFor(puuid, champ, group) {
+        async function gamesFor(puuid, champ, group, lastPlayTime) {
             let have = await store.storedCount(puuid, champ.name);
             if (have >= GAMES_PER_PLAYER) return;
             const known = await store.knownMatchIds(puuid);
-            if (!idsCache.has(puuid)) {
-                idsCache.set(puuid, await call(() => api.getMatchIds(puuid, now() - RETENTION_MS, SOLO_QUEUE)) || []);
+            const cacheKey = `${puuid}:${champ.key}`;
+            if (!idsCache.has(cacheKey)) {
+                const endTime = Number.isFinite(lastPlayTime) ? Math.min(now(), lastPlayTime + LAST_PLAY_SLACK_MS) : now();
+                idsCache.set(cacheKey, await call(() => api.getMatchIdsRange(puuid,
+                    { startTime: now() - RETENTION_MS, endTime, queue: SOLO_QUEUE, count: 100 })) || []);
             }
             const champName = String(champ.name).toLowerCase();
             let checks = 0;
-            for (const id of idsCache.get(puuid)) {
+            for (const id of idsCache.get(cacheKey)) {
                 if (have >= GAMES_PER_PLAYER || checks >= MAX_CHECKS_PER_PLAYER) break;
                 if (known.has(id)) continue;
                 checks++;
@@ -198,12 +207,14 @@ function createSampleLoader({ api, store, now = Date.now }) {
         try {
             for (const group of groups || []) {
                 const candidates = await candidatesFor(group);
+                const byPuuid = new Map(candidates.map(c => [c.puuid, c]));
                 for (const champ of champions || []) {
                     const picks = pick(candidates, champ);
                     result.found[champ.name][group.key] = picks.length;
                     for (let i = 0; i < picks.length; i++) {
                         onProgress(`${champ.name}: ${group.label} player ${i + 1} of ${picks.length}…`);
-                        await gamesFor(picks[i], champ, group);
+                        const m = (byPuuid.get(picks[i]).masteries || {})[champ.key];
+                        await gamesFor(picks[i], champ, group, m && m.lastPlayTime);
                     }
                 }
             }
@@ -218,4 +229,4 @@ function createSampleLoader({ api, store, now = Date.now }) {
     return { run };
 }
 
-module.exports = { MAX_PAGES, LIST_TTL_MS, MASTERY_TTL_MS, MAX_CHECKS_PER_PLAYER, sampleGameFrom, createSampleLoader };
+module.exports = { MAX_PAGES, LIST_TTL_MS, MASTERY_TTL_MS, MAX_CHECKS_PER_PLAYER, LAST_PLAY_SLACK_MS, sampleGameFrom, createSampleLoader };

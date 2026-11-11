@@ -315,6 +315,20 @@ async function getApexLeague(tier) {
     return withPuuid(league && league.entries);
 }
 
+/**
+ * A player's Solo/Duo-style match ids in a time window, newest first, one call
+ * (≤ 100). Times in ms; Riot takes seconds (as getMatchIds converts).
+ */
+async function getMatchIdsRange(puuid, { startTime = null, endTime = null, queue = null, count = 100 } = {}) {
+    const REGION = getRegion();
+    const params = { start: 0, count: Math.min(100, count) };
+    if (startTime) params.startTime = Math.floor(startTime / 1000);
+    if (endTime) params.endTime = Math.floor(endTime / 1000);
+    if (queue) params.queue = queue;
+    return riotGet(`https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids`,
+        { params, label: `ids range q=${queue}` });
+}
+
 /** A player's mastery on every champion they've played: [{ championId, championPoints, lastPlayTime }]. */
 async function getAllMasteries(puuid) {
     const PLATFORM = getPlatform();
@@ -340,7 +354,7 @@ module.exports = {
     getMatchIds, getMatchData, getMatchTimeline,
     getPuuidByRiotId, getSummonerByPuuid, getLeagueByPuuid,
     getChampionMastery, getRecentMatchIds,
-    getLeagueEntries, getApexLeague, getAllMasteries,
+    getLeagueEntries, getApexLeague, getAllMasteries, getMatchIdsRange,
     limiter, scrubKey,
     PLATFORM_ROUTING, routingFor, accountRoutingFor,
 };

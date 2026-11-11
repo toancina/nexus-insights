@@ -47,7 +47,10 @@ function fakeApi(world, over = {}) {
         async getLeagueEntries(tier, division, page) { calls.list++; return (world.pages[`${tier} ${division}`] || [])[page - 1] || []; },
         async getApexLeague(tier) { calls.apex++; return world.apex?.[tier] || []; },
         async getAllMasteries(puuid) { calls.mastery++; return world.masteries[puuid] || []; },
-        async getMatchIds(puuid) { calls.ids++; return (world.games[puuid] || []).map((_, i) => `${puuid}-${i}`); },
+        async getMatchIdsRange(puuid, range) {
+            calls.ids++; (world.ranges = world.ranges || []).push({ puuid, ...range });
+            return (world.games[puuid] || []).map((_, i) => `${puuid}-${i}`);
+        },
         async getMatchData(id) {
             calls.match++; fetched.push(id);
             const [puuid, i] = [id.slice(0, id.lastIndexOf('-')), Number(id.slice(id.lastIndexOf('-') + 1))];
@@ -241,4 +244,16 @@ test('sampleGameFrom sets winFeatures and blueWin', () => {
     assert.equal(typeof g.game.winFeatures, 'string');
     assert.equal(g.game.winFeatures.split(';').length, 2);
     assert.equal(L.sampleGameFrom(rawGame('X8', 'p', 'Yorick'), null, 'p').game.winFeatures, '');
+});
+
+test('asks for match ids ending just after the player last played the champion', async () => {
+    const w = world();
+    w.masteries.s6 = [mastery(83, 6000, NOW - 30 * DAY)];
+    const { api } = fakeApi(w);
+    await runOnce(api, fakeStore());
+    const r = w.ranges.find(x => x.puuid === 's6');
+    assert.equal(r.queue, 420);
+    assert.equal(r.endTime, NOW - 30 * DAY + L.LAST_PLAY_SLACK_MS);
+    assert.equal(r.startTime, NOW - 90 * DAY);
+    assert.equal(r.count, 100);
 });
