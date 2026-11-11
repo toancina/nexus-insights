@@ -23,6 +23,7 @@ const { parsePlayers, playerTags, rankSummary, gamesTogether } = require('../ser
 const { loadTeammates } = require('../services/matchService');
 const { loadConfig } = require('../services/config');
 const { nextItemOptions, championGames, MIN_GAMES } = require('../services/nextItem');
+const winCurve = require('../services/winCurve');
 const { formatWpa } = require('../services/itemWpa');
 const { getChampionIcon, timeAgo, RUNE_ICONS } = require('./matchCard');
 const { itemImg } = require('./itemIcon');
@@ -91,7 +92,7 @@ function nextItemRows(options) {
     return options.slice(0, 3).map(o => {
         const noWpa = o.wpaGames < MIN_GAMES;
         const color = noWpa || Math.abs(o.wpa) < 0.05 ? '' : o.wpa > 0 ? 'var(--success)' : 'var(--error)';
-        const wpaTitle = noWpa ? '' : ` · WPA ${formatWpa(o.wpa)} over ${o.wpaGames} games`;
+        const wpaTitle = noWpa ? '' : ` · WPA ${formatWpa(o.wpa)}${o.margin != null ? ` ± ${Math.round(o.margin)}` : ''} over ${o.wpaGames} games`;
         return `<div class="live-next-row${o.games < MIN_GAMES ? ' is-low' : ''}" title="${escapeAttr(itemName(o.itemId))}: ${o.wins}W ${o.games - o.wins}L${wpaTitle}">
             ${itemImg(o.itemId, { extra: 'class="live-item"' })}
             <span class="live-next-name">${escapeHtml(itemName(o.itemId))}</span>
@@ -120,7 +121,10 @@ function nextItemCard(p) {
     if (!state.ownGames) {
         return `${title}<div class="live-line live-muted">Uses your stored games, and they belong to the account in Settings, not this one.</div>`;
     }
-    const { role, games } = championGames(state.ownGames, p.championId, p.position);
+    // Sample games (other players on this champion) join while the Settings switch is on
+    const samplesOn = typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled();
+    const { role, games } = championGames(state.ownGames, p.championId, p.position, { extra: samplesOn ? (window.sampleRows || []) : [] });
+    const fitted = winCurve.isFitted();
     if (!games.length) {
         return `${title}<div class="live-line live-muted">No ${escapeHtml(p.championName)} games with purchase data stored yet.</div>`;
     }
@@ -132,13 +136,19 @@ function nextItemCard(p) {
         <div class="live-next-sub">${nextItemBasis(p, r, role)}</div>
         <div class="live-next-row live-next-head"><span></span><span>Item</span>
             <span class="live-next-num">Games</span><span class="live-next-num">Win rate</span><span class="live-next-num">WPA</span></div>
+        ${fitted && !r.clearPick && r.options.filter(o => o.wpaGames >= MIN_GAMES).length > 1
+            ? '<div class="live-next-sub live-muted">Too close to call: the top options are within the luck margin.</div>' : ''}
         ${nextItemRows(r.options)}
-        <div class="live-next-note">WPA: the average change in your team's estimated win chance from that purchase until your next trip to the shop. It shows how your games went, not what the item caused. Boots are left out.</div>`;
+        ${fitted
+            ? '<div class="live-next-note">WPA: how much more often games with that purchase were won than the game state at the purchase predicted (± in the tooltip is the luck margin). Includes sample games from other players while that setting is on. Boots are left out.</div>'
+            : '<div class="live-next-note">WPA: the average change in your team\'s estimated win chance from that purchase until your next trip to the shop. It shows how your games went, not what the item caused. Boots are left out.</div>'}`;
 }
 
 /** The card for your row, recomputed only when the champion, role or items change. */
 function nextItemHtml(p) {
-    const key = `${p.championId}|${p.position}|${p.items.join(',')}`;
+    const samples = typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled()
+        ? `${(window.sampleRows || []).length}:${winCurve.isFitted() ? 1 : 0}` : 'off';
+    const key = `${p.championId}|${p.position}|${p.items.join(',')}|${samples}`;
     if (!state.next || state.next.key !== key) state.next = { key, html: nextItemCard(p) };
     return `<div class="live-next">${state.next.html}</div>`;
 }

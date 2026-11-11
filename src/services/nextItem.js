@@ -16,7 +16,7 @@
  */
 
 const { decodePurchases } = require('./itemBuild');
-const { marginOf } = require('./itemWpa');
+const { marginOf, beatsBeyondMargin } = require('./itemWpa');
 const winCurve = require('./winCurve');
 
 const MIN_GAMES = 5;   // same as LOW_SAMPLE on the Champions page
@@ -110,7 +110,19 @@ function nextItemOptions(games, owned, { isCompleted = () => true, minGames = MI
         if (level.matched >= minGames) { best = level; break; }
         if (!best || level.matched > best.matched) best = level;
     }
-    return { basis: best.basis, games: best.matched, options: rankOptions(best.counts, minGames) };
+    const options = rankOptions(best.counts, minGames);
+    return { basis: best.basis, games: best.matched, options, clearPick: clearPick(options, minGames) };
+}
+
+/**
+ * Whether the top option is a clear pick: it has a luck margin (only the
+ * fitted "won vs expected" WPA has one) and beats the next ranked option
+ * beyond both margins, or no other option has enough games.
+ */
+function clearPick(options, minGames) {
+    const [top, next] = options.filter(o => o.wpaGames >= minGames);
+    if (!top || top.margin == null) return false;
+    return !next || beatsBeyondMargin(top, next);
 }
 
 /**

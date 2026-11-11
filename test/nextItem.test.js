@@ -239,3 +239,19 @@ test('championGames adds extra rows after the role rule', () => {
     assert.equal(anyRole.role, null);
     assert.equal(anyRole.games.length, 4);
 });
+
+test('clearPick: true only when the top option beats the next beyond the luck margin', () => {
+    // Fitted entries carry a variance (v); the window WPA doesn't
+    const g = (next, wpa, v) => ({ win: true, purchases: [{ itemId: 3071, t: 10 * MIN }, { itemId: next, t: 20 * MIN }],
+        wpa: [null, { itemId: next, t: 20 * MIN, wpa, ...(v == null ? {} : { v }) }] });
+    const many = (next, wpa, v, n) => Array.from({ length: n }, () => g(next, wpa, v));
+    const opts = { isCompleted, minGames: 5 };
+    // gap 30, margins ~1.96·50/√20 ≈ 22 each → √(22²+22²) ≈ 31: too close
+    assert.equal(nextItemOptions([...many(3053, 20, 2500, 20), ...many(3074, -10, 2500, 20)], [3071], opts).clearPick, false);
+    // gap 60 → clear
+    assert.equal(nextItemOptions([...many(3053, 30, 2500, 20), ...many(3074, -30, 2500, 20)], [3071], opts).clearPick, true);
+    // the only option with enough games
+    assert.equal(nextItemOptions([...many(3053, 5, 2500, 6), ...many(3074, 9, 2500, 2)], [3071], opts).clearPick, true);
+    // window WPA (curve off): never a "clear pick" claim
+    assert.equal(nextItemOptions([...many(3053, 30, null, 20), ...many(3074, -30, null, 20)], [3071], opts).clearPick, false);
+});
