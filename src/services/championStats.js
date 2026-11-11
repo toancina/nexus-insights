@@ -139,14 +139,28 @@ function itemRows(games, isCoreItem) {
  * @param {Function} [opts.isCoreItem]  itemId → bool (finished items only); the
  *                                      page passes a Data Dragon-based check
  */
+/**
+ * A rune page's number (sample games, 2026-11): its win rate minus the
+ * champion's over the same games, in points, with a 95% binomial margin. A
+ * page that always won or always lost gets its margin from (wins+1)/(games+2),
+ * so a 3/3 page isn't reported as certain.
+ */
+function runeEdge(row, championWinRate) {
+    if (!row.games || championWinRate == null) return { edge: null, edgeMargin: null };
+    const wr = row.winRate;
+    const p = wr === 0 || wr === 1 ? (row.wins + 1) / (row.games + 2) : wr;
+    return { edge: (wr - championWinRate) * 100, edgeMargin: 1.96 * Math.sqrt(p * (1 - p) / row.games) * 100 };
+}
+
 function championDetail(matches, champion, { role = null, isCoreItem = id => id > 0 } = {}) {
     const all = matches.filter(m => m.championName === champion);
     const games = role ? all.filter(m => (m.teamPosition || '') === role) : all;
+    const summary = summarize(games);
 
     const runes = rateRows(games, m => (m.primaryRune ? [`${m.primaryRune}|${m.secondaryRuneStyle || 0}`] : []), games.length)
         .map(({ key, ...r }) => {
             const [keystone, secondary] = key.split('|').map(Number);
-            return { keystone, secondary, ...r };
+            return { keystone, secondary, ...r, ...runeEdge(r, summary.winRate) };
         });
 
     const known = games.filter(m => m.laneOpponent);
@@ -162,7 +176,7 @@ function championDetail(matches, champion, { role = null, isCoreItem = id => id 
 
     return {
         champion, role,
-        summary: summarize(games),
+        summary,
         roles: rolesOf(all),
         runes,
         items: itemRows(games, isCoreItem),

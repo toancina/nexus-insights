@@ -1219,6 +1219,12 @@ function updateTopBar(tab) {
 const pageScrollTops = {};
 let shownTopTab = 'analytics';
 
+/** Re-render the open page that shows sample-game numbers (switch, download, refit). */
+window.refreshSamplePages = function () {
+    if (shownTopTab === 'champions' && typeof window.openChampionsPanel === 'function') window.openChampionsPanel();
+    if (shownTopTab === 'coaching' && typeof window.renderCoachingPanel === 'function') window.renderCoachingPanel();
+};
+
 window.switchTopTab = function (tab) {
     if (!TOP_TABS[tab]) tab = 'analytics';
     const scroller = document.getElementById('pageScroll');

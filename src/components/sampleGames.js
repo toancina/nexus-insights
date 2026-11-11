@@ -18,6 +18,8 @@ const { createSampleLoader } = require('../services/sampleLoader');
 const { topChampions, sampleGroups, championKeyOf, groupOf, PLAYERS_PER_GROUP } = require('../services/sampleSelect');
 const { getChampionList } = require('../services/dataDragon');
 const { getLpReadings } = require('../services/matchService');
+const winCurve = require('../services/winCurve');
+const { buildModel, needsRefit, MIN_GAMES } = require('../services/winModel');
 
 const loader = createSampleLoader({ api: riotApi, store: sampleStore });
 const holds = new Set();
@@ -173,11 +175,66 @@ window.runSampleDownload = function () {
     return running;
 };
 
-/** The Settings switch: saved and applied at once. */
-window.setSampleGames = async function (on) {
-    updateConfig({ sampleGames: on === true });
-    if (typeof window.applyWinCurveSetting === 'function') window.applyWinCurveSetting();
-    await window.loadSampleRows();
-    if (on && !window.isSyncing) window.runSampleDownload();
+// ── The fitted win-chance curve ─────────────────────────────────────────────
+
+/** Point winCurve at the saved model while the switch is on (today's curve otherwise). */
+window.applyWinCurveSetting = function () {
+    const config = loadConfig();
+    winCurve.configure({ enabled: config.sampleGames === true, model: config.winModel || null });
+};
+
+/** Every game with features and a result: yours (remakes out) and sample games, once each. */
+function trainingGames() {
+    const games = new Map();
+    for (const m of window.matchesData || []) {
+        if (!m.winFeatures || (typeof window.isRemake === 'function' && window.isRemake(m))) continue;
+        games.set(m.matchId, { matchId: m.matchId, winFeatures: m.winFeatures, blueWin: (m.teamId === 100) === (m.win === 1) ? 1 : 0 });
+    }
+    for (const r of window.sampleRows || []) {
+        if (r.winFeatures && !games.has(r.matchId)) games.set(r.matchId, { matchId: r.matchId, winFeatures: r.winFeatures, blueWin: r.blueWin ? 1 : 0 });
+    }
+    return [...games.values()];
+}
+
+/** Refit after 25 more games or a week (winModel.needsRefit); then re-point the curve. */
+window.maybeRefitWinModel = async function () {
+    if (!enabled()) return;
+    const games = trainingGames();
+    const saved = loadConfig().winModel;
+    if (!needsRefit(saved, games.length, Date.now())) return;
+    // Let the page paint first: a fit takes ~0.1–0.3 s
+    await new Promise(r => setTimeout(r, 0));
+    const model = buildModel(games, { now: Date.now() });
+    const { bands, ...kept } = model;
+    updateConfig({ winModel: kept });
+    console.log('Win-chance model:', kept);
+    window.applyWinCurveSetting();
+    renderStatus();
     if (typeof window.refreshSamplePages === 'function') window.refreshSamplePages();
 };
+
+window.winModelStatusText = function () {
+    const model = loadConfig().winModel;
+    if (!enabled() || !model) return '';
+    if (model.ok) return `Win chance fitted on ${model.games} games.`;
+    if (model.reason === 'few-games') return `Win chance: not enough games to fit yet (needs ${MIN_GAMES}).`;
+    return "Win chance: the fitted curve didn't pass its check; using the standard one.";
+};
+
+/**
+ * The Settings switch: saved and applied at once. Turning it on runs a quiet
+ * sync, which also indexes your games' win features and then starts the
+ * download; turning it off puts today's curve back straight away.
+ */
+window.setSampleGames = async function (on) {
+    updateConfig({ sampleGames: on === true });
+    window.applyWinCurveSetting();
+    await window.loadSampleRows();
+    if (on && !window.isSyncing) {
+        if (typeof window.handleSync === 'function') window.handleSync({ auto: true });
+        else window.runSampleDownload();
+    }
+    if (typeof window.refreshSamplePages === 'function') window.refreshSamplePages();
+};
+
+window.applyWinCurveSetting();

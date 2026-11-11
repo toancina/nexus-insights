@@ -111,7 +111,8 @@ src/
 │   ├── matchTimeline.js       # Timeline series + events (#3)
 │   ├── gameReport.js          # Game report numbers (#9)
 │   ├── itemBuild.js           # Item purchases + build order (#7)
-│   ├── itemWpa.js             # Item WPA: win-chance change after a purchase (#89)
+│   ├── itemWpa.js             # Item WPA: win-chance change after a purchase (#89); won vs expected + margins
+│   ├── winFeatures.js / winModel.js / winCurve.js  # Fitted win-chance curve: inputs, model, the one curve every view reads
 │   ├── winChanceStats.js      # Win-chance curve in numbers: swings, throws, comebacks (Chat)
 │   ├── deathMap.js            # Death positions, density, zones (#8)
 │   ├── laneGaps.js            # Per-minute lane gaps (#12)
@@ -1494,4 +1495,45 @@ dialog, `config.sampleGames`, **off by default**, applies on click). Design:
   off). A row counts only while its tier + division is one of your current
   groups (`sampleSelect.groupOf`).
 - Live check (2026-11-11): a Silver I page is 205 entries, all with `puuid`.
+
+### Fitted win chance and WPA "won vs expected" (2026-11)
+
+Only while the sample-games switch is on. Off = today's curve and WPA.
+
+- **Inputs** (`services/winFeatures.js`, pure, tested): per timeline frame,
+  team 100 minus team 200: gold, XP, player kills, towers, inhibitors down
+  (5 min respawn), elemental dragons, soul, Baron buff (3 min), Elder buff
+  (2.5 min), and the minute. Stored as `matches.winFeatures` /
+  `sample_games.winFeatures` (`"m,g,x,k,t,i,d,s,b,e;…"`), written by
+  `computeAdvancedStatsForMatch` always, backfilled for old games **only while
+  the switch is on** (`backfillComputedStats(_, { winFeatures })`).
+- **Model** (`services/winModel.js`, pure, tested): logistic regression on
+  `[g, x, k, towers, inhibs, dragons, soul, baron, elder, g·τ, x·τ, k·τ]`
+  (g, x per 1000, τ = minute/30), no intercept, so both sides add to 100%.
+  Newton/IRLS with L2 = 1. Needs 300 games; ~20% held out by match id; used
+  only when its log loss beats the hand-tuned curve, no 10% band (≥ 100
+  frames) is more than 10 points off, and its worst band is no worse than the
+  hand-tuned one's. Real data (598 games, 2026-11-11): log loss 0.552 vs
+  0.672, bands 0–7 points off vs up to 19. (The design said 5 points; 125
+  held-out games can't resolve that, and L2 up to 1000 didn't change it.)
+  Refit after 25 more games or 7 days (`needsRefit`), saved as
+  `config.winModel`. Fitting 600 games takes ~0.1 s.
+- **`services/winCurve.js`** decides the curve: `configure({ enabled, model })`
+  (from `applyWinCurveSetting()`), `pointsFor(match)`, `seriesFor(raw,
+  timeline, teamId)`, `purchaseWpa(purchases, match)`. Every reader goes
+  through it (chart, expanded rows, game report, Chat, Champions, Next item,
+  Match History tooltips). The stored `winChance` column stays the hand-tuned
+  curve. A sample row has no stored curve; without a model it is rebuilt from
+  its features.
+- **WPA when fitted** (`itemWpa.wonVsExpected`): result (100 / 0) minus the
+  chance at the purchase; average over games; luck margin
+  `1.96·√Σ from(100−from) / n` (`marginOf`); rows from `itemTable`,
+  `itemBuild.rateRows` and `nextItemOptions` carry `margin` (null for the
+  window WPA). `beatsBeyondMargin(a, b)`: gap > √(m₁² + m₂²). Single-game
+  values (tooltips, Chat's one-game items) stay the window rule.
+- **Rune pages** (`championStats.championDetail`): `edge` = page win rate −
+  champion win rate (points), `edgeMargin` binomial 95% (a 3/3 page uses
+  (wins+1)/(games+2)).
+- Turning the switch on runs a quiet sync (indexes the features, then
+  downloads); `maybeRefitWinModel()` runs after every download.
 

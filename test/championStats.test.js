@@ -127,3 +127,19 @@ test('roleLabel', () => {
     assert.equal(C.roleLabel('BOTTOM'), 'ADC');
     assert.equal(C.roleLabel(''), 'No role');
 });
+
+test('championDetail rune rows carry edge and edgeMargin (points vs the champion\'s win rate)', () => {
+    const g = (win, primaryRune, i) => makeMatch({ matchId: `R${primaryRune}-${i}`, championName: 'Yorick', win, primaryRune, secondaryRuneStyle: 8400 });
+    const games = [
+        ...[1, 1, 1, 1, 0].map((w, i) => g(w, 8010, i)),    // 4/5
+        ...[1, 1, 0, 0, 0].map((w, i) => g(w, 8021, i)),    // 2/5
+    ];
+    const d = C.championDetail(games, 'Yorick');
+    const page = d.runes.find(r => r.keystone === 8010);
+    assert.ok(Math.abs(page.edge - 20) < 1e-9);
+    assert.ok(Math.abs(page.edgeMargin - 1.96 * Math.sqrt(0.8 * 0.2 / 5) * 100) < 1e-9);
+    assert.ok(Math.abs(d.runes.find(r => r.keystone === 8021).edge + 20) < 1e-9);
+    // A page that always won still has a margin
+    const perfect = C.championDetail([...[1, 1, 1].map((w, i) => g(w, 8010, i)), g(0, 8021, 9)], 'Yorick').runes.find(r => r.keystone === 8010);
+    assert.ok(perfect.edgeMargin > 0);
+});
