@@ -30,6 +30,13 @@
     const Board    = require('./coachingBoard');
     const { ROLE_NAMES } = require('./roleRanks');
     const { escapeHtml, formatInt } = require('./dom');
+    // Build and runes (sample games, 2026-11)
+    const { buildReport } = require('../services/buildReport');
+    const { itemImg } = require('./itemIcon');
+    const { isBuildItem, isExcludedItem } = require('./itemKinds');
+    const { getItemData, getRuneData } = require('../services/dataDragon');
+    const { formatWpa } = require('../services/itemWpa');
+    const { formatClock } = require('../services/matchTimeline');
 
     const fmt = (v, dp = 1) => (v === null || v === undefined || Number.isNaN(v))
         ? '—' : Number(v).toFixed(dp);
@@ -201,7 +208,55 @@
           </div>
           <div class="coach-report-summary">${summary}</div>
           <div class="coach-tiles">${tiles}</div>
+          ${renderBuild(g)}
         </div>`;
+    }
+
+    // ── 2b. Build and runes, against your level and the level above ─────────
+    const itemName = id => (getItemData(id) || {}).name || `Item ${id}`;
+    const runeName = id => (getRuneData(id) || {}).name || `Rune ${id}`;
+    const ORDINAL = ['1st', '2nd', '3rd'];
+
+    function wpaSpan(value, margin) {
+        if (!Number.isFinite(value)) return '<span class="coach-dim">–</span>';
+        const muted = margin != null && Math.abs(value) <= margin;
+        const cls = muted ? 'coach-build-wpa is-muted' : `coach-build-wpa ${value > 0 ? 'good' : value < 0 ? 'bad' : ''}`;
+        const title = margin != null ? `${formatWpa(value)} ± ${Math.round(margin)}${muted ? ': within the luck margin' : ''}` : 'WPA';
+        return `<span class="${cls}" title="${escapeHtml(title)}">${formatWpa(value)}${margin != null ? ` <span class="coach-dim">± ${Math.round(margin)}</span>` : ''}</span>`;
+    }
+
+    function itemCell(id, share) {
+        if (!id) return '<span class="coach-dim">–</span>';
+        return `<span class="coach-build-cell">${itemImg(id, { extra: 'class="coach-item"' })}<span>${escapeHtml(itemName(id))}</span>
+            ${share != null ? `<span class="coach-dim">${Math.round(share * 100)}%</span>` : ''}</span>`;
+    }
+
+    function renderBuild(game) {
+        if (typeof window.sampleGamesEnabled !== 'function' || !window.sampleGamesEnabled() || !game) return '';
+        const groups = window.sampleGroupsNow || [];
+        const r = buildReport(game, state.games, window.sampleRows || [], groups, { isBuildItem, isExcluded: isExcludedItem });
+        const title = '<div class="panel-title">Build and runes</div>';
+        if (!r.items.length && !r.rune.keystone) return `<div class="coach-build panel">${title}<div class="coach-dim">No purchase data for this game.</div></div>`;
+
+        const items = r.items.map(i => `
+            <div class="coach-build-item">${itemImg(i.itemId, { extra: 'class="coach-item"' })}
+              <div><div>${escapeHtml(itemName(i.itemId))}</div>
+                <div class="coach-dim">${formatClock(i.t)}${i.usualT != null ? ` · usually ${formatClock(i.usualT)}` : ''} · WPA ${wpaSpan(i.wpa, i.margin)}</div></div>
+            </div>`).join('');
+        const rune = r.rune.keystone
+            ? `<div class="coach-dim">Rune page: <b>${escapeHtml(runeName(r.rune.keystone))}</b> · ${wpaSpan(r.rune.edge, r.rune.edgeMargin)} vs the champion's win rate</div>`
+            : '';
+
+        const head = `<tr><th></th><th>You</th>${r.groups.map(g => `<th>${escapeHtml(g.label)} players <span class="coach-dim">(${g.games})</span></th>`).join('')}</tr>`;
+        const rows = [0, 1, 2].map(i => `<tr><td>${ORDINAL[i]} item</td><td>${itemCell(r.yourCore[i])}</td>${r.groups.map(g => `<td>${itemCell(g.core[i] && g.core[i].itemId, g.core[i] && g.core[i].share)}</td>`).join('')}</tr>`).join('')
+            + `<tr><td>Keystone</td><td>${r.rune.keystone ? escapeHtml(runeName(r.rune.keystone)) : '–'}</td>${r.groups.map(g => `<td>${g.keystone ? `${escapeHtml(runeName(g.keystone.id))} <span class="coach-dim">${Math.round(g.keystone.share * 100)}%</span>` : '–'}</td>`).join('')}</tr>`;
+        const compare = r.noSamples
+            ? `<div class="coach-dim">No sample games for ${escapeHtml(game.championName || '')} yet: they're downloaded for your 3 most-played champions.</div>`
+            : `<table class="coach-build-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+        const better = r.better
+            ? `<div class="coach-build-better">${escapeHtml(itemName(r.better.itemId))} scores ${Math.round(r.better.gap)} points more than ${escapeHtml(itemName(r.better.insteadOf))} as the ${ORDINAL[r.better.slot]} item, beyond the luck margin.</div>`
+            : '';
+        return `<div class="coach-build panel">${title}<div class="coach-build-items">${items}</div>${rune}${compare}${better}</div>`;
     }
 
     // ── 3. Habit board (#61) ─────────────────────────────────────────────────
