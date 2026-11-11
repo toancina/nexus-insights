@@ -20,6 +20,30 @@ const { wrTextColor, LOW_SAMPLE } = require('./winRateColor');
 const { decodePurchases, buildOrderTable, firstBackStats, firstBackAt } = require('../services/itemBuild');
 const { formatWpa } = require('../services/itemWpa');
 const winCurve = require('../services/winCurve');
+const { championPool, poolLabel } = require('../services/samplePool');
+
+/**
+ * Sample games (2026-11): with the Settings switch on, the build and rune
+ * numbers also count other players' games on this champion (samplePool.js).
+ * Off: null, and the page is exactly what it was.
+ */
+function samplePool(matches, champion, role) {
+    if (typeof window.sampleGamesEnabled !== 'function' || !window.sampleGamesEnabled()) return null;
+    const periodEl = document.getElementById('periodFilter');
+    return championPool(matches, window.sampleRows || [], champion, {
+        role, period: periodEl ? periodEl.value : '', groups: window.sampleGroupsNow || [],
+        patchSource: window.matchesData || [],
+    });
+}
+
+/** A WPA-style number with its luck margin: muted (no colour) when the margin includes 0. */
+function marginCell(value, margin, games, cls) {
+    if (games < LOW_SAMPLE || !Number.isFinite(value)) return `<span class="${cls}">–</span>`;
+    const muted = margin != null && Math.abs(value) <= margin;
+    const color = muted || Math.abs(value) < 0.05 ? '' : value > 0 ? 'var(--success)' : 'var(--error)';
+    const title = margin != null ? ` title="${formatWpa(value)} ± ${Math.round(margin)}${muted ? ': within the luck margin' : ''}"` : '';
+    return `<span class="${cls}${muted ? ' is-muted' : ''}"${color ? ` style="color:${color}"` : ''}${title}>${formatWpa(value)}</span>`;
+}
 const { formatClock } = require('../services/matchTimeline');
 
 const COLUMNS = [
@@ -108,19 +132,22 @@ function renderList(rows) {
     return `<table class="ch-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function rateTable(title, firstCol, rows, cellsOf, empty) {
+function rateTable(title, firstCol, rows, cellsOf, empty, { edge = false } = {}) {
+    const cols = edge ? 5 : 4;
     const body = rows.length ? rows.map(r => `
         <tr class="${r.games < LOW_SAMPLE ? 'is-low' : ''}">
             <td>${cellsOf(r)}</td>
             <td class="num">${r.games}</td>
             <td class="num">${pct(r.pickRate)}</td>
             <td class="num">${wrCell(r.winRate, r.games)}</td>
-        </tr>`).join('') : `<tr><td colspan="4" class="ch-empty">${empty}</td></tr>`;
+            ${edge ? `<td class="num">${marginCell(r.edge, r.edgeMargin, r.games, 'ch-edge')}</td>` : ''}
+        </tr>`).join('') : `<tr><td colspan="${cols}" class="ch-empty">${empty}</td></tr>`;
+    const edgeHead = edge ? '<th class="num" title="Win rate with this page minus the champion\'s win rate over the same games, in points; ± is the luck margin">WPA</th>' : '';
     return `
         <div class="ch-card">
             <div class="ch-card-title">${title}</div>
             <table class="ch-subtable">
-                <thead><tr><th>${firstCol}</th><th class="num">Games</th><th class="num">Pick</th><th class="num">Win rate</th></tr></thead>
+                <thead><tr><th>${firstCol}</th><th class="num">Games</th><th class="num">Pick</th><th class="num">Win rate</th>${edgeHead}</tr></thead>
                 <tbody>${body}</tbody>
             </table>
         </div>`;
@@ -131,9 +158,10 @@ function rateTable(title, firstCol, rows, cellsOf, empty) {
  * finished item you kept, each with games, win rate and pick rate. Plus the
  * first-back timing line. From the stored purchases; no timelines parsed.
  */
-function renderBuildOrder(matches, champion, role) {
-    const games = matches
-        .filter(m => m.championName === champion && (!role || (m.teamPosition || '') === role) && m.itemPurchases)
+function renderBuildOrder(matches, champion, role, pool = null) {
+    const source = pool ? pool.games : matches.filter(m => m.championName === champion && (!role || (m.teamPosition || '') === role));
+    const games = source
+        .filter(m => m.itemPurchases)
         .map(m => {
             const purchases = decodePurchases(m.itemPurchases);
             return {
@@ -151,13 +179,12 @@ function renderBuildOrder(matches, champion, role) {
     const cols = [['Start', t.start], ['First back', t.firstBack], ['1st item', t.core[0]], ['2nd item', t.core[1]], ['3rd item', t.core[2]]];
     const icons = key => String(key).split('+').map(id => itemIcon(Number(id))).join('');
     const names = key => String(key).split('+').map(id => itemName(Number(id))).join(' + ');
-    // Average WPA (#89): "–" until LOW_SAMPLE of the row's games have a win-chance curve
+    // Average WPA (#89): "–" until LOW_SAMPLE of the row's games have a win-chance curve;
+    // with a fitted curve it is won vs expected, muted inside its luck margin
     const wpaText = r => (r.wpaGames >= LOW_SAMPLE ? formatWpa(r.wpa) : '–');
-    const wpaCell = r => {
-        const color = r.wpaGames < LOW_SAMPLE || Math.abs(r.wpa) < 0.05 ? '' : r.wpa > 0 ? 'var(--success)' : 'var(--error)';
-        return `<span class="ch-build-wpa"${color ? ` style="color:${color}"` : ''}>${wpaText(r)}</span>`;
-    };
-    const wpaTitle = r => (r.wpaGames >= LOW_SAMPLE ? ` · WPA ${wpaText(r)} over ${r.wpaGames} games` : '');
+    const wpaCell = r => marginCell(r.wpaGames >= LOW_SAMPLE ? r.wpa : NaN, r.margin, r.wpaGames, 'ch-build-wpa');
+    const wpaTitle = r => (r.wpaGames >= LOW_SAMPLE
+        ? ` · WPA ${wpaText(r)}${r.margin != null ? ` ± ${Math.round(r.margin)}` : ''} over ${r.wpaGames} games` : '');
     const col = ([label, rows]) => `
         <div class="ch-build-col">
             <div class="ch-build-head">${label}</div>
@@ -177,7 +204,9 @@ function renderBuildOrder(matches, champion, role) {
     return `
         <div class="ch-card ch-card--wide">
             <div class="ch-card-title">Build order <span>${formatInt(games.length)} games with a timeline · numbered items are finished items you kept, boots left out · under 5% of games hidden</span></div>
-            <div class="ch-note ch-wpa-note">Last number: <b>WPA</b>, the average change in your team's estimated win chance from the purchase until your next trip to the shop (at most 5 min). It shows how games went while you had the item, not what the item caused.</div>
+            ${winCurve.isFitted()
+                ? '<div class="ch-note ch-wpa-note">Last number: <b>WPA</b>, how much more often games with this purchase were won than the game state at the purchase predicted (± is the luck margin; greyed out when the margin includes 0).</div>'
+                : '<div class="ch-note ch-wpa-note">Last number: <b>WPA</b>, the average change in your team\'s estimated win chance from the purchase until your next trip to the shop (at most 5 min). It shows how games went while you had the item, not what the item caused.</div>'}
             <div class="ch-build-grid">${cols.map(col).join('')}</div>
             ${back}
         </div>`;
@@ -232,6 +261,10 @@ function renderDetail(matches) {
     }
     const d = championDetail(matches, state.selected, { role: state.role, isCoreItem });
     const s = d.summary;
+    const pool = samplePool(matches, d.champion, d.role);
+    // Rune pages over the pool (yours + sample games) while sample games are on
+    const runes = pool ? championDetail(pool.games, d.champion, { role: d.role, isCoreItem }).runes : d.runes;
+    const poolNote = pool ? `<div class="ch-note ch-pool-note">${escapeHtml(poolLabel(pool.counts, window.sampleGroupsNow || []))} · runes and build order only</div>` : '';
     const allGames = d.roles.reduce((a, r) => a + r.games, 0);
 
     const roleChips = d.roles.length > 1 ? `
@@ -252,13 +285,14 @@ function renderDetail(matches) {
             <div class="ch-detail-wr" style="color:${wrTextColor(s.winRate)}">${pct(s.winRate)}<span>win rate</span></div>
         </div>
         ${roleChips}
+        ${poolNote}
         <div class="ch-cards">
-            ${rateTable('Rune pages', 'Rune page', d.runes.slice(0, 6), r =>
+            ${rateTable('Rune pages', 'Rune page', runes.slice(0, 6), r =>
                 `<div class="ch-cellrow">${runeIcon(r.keystone)}${runeIcon(r.secondary, 'ch-rune ch-rune--sm')}
-                    <span>${escapeHtml(runeName(r.keystone))}</span></div>`, 'No rune data')}
+                    <span>${escapeHtml(runeName(r.keystone))}</span></div>`, 'No rune data', { edge: !!pool })}
             ${rateTable('Core items', 'Item', d.items.slice(0, 8), i =>
                 `<div class="ch-cellrow">${itemIcon(i.itemId)}<span>${escapeHtml(itemName(i.itemId))}</span></div>`, 'No finished items')}
-            ${renderBuildOrder(matches, d.champion, d.role)}
+            ${renderBuildOrder(matches, d.champion, d.role, pool)}
             ${renderMatchups(d)}
         </div>
         <div class="ch-note">Items are each game's final build. Win rates under ${LOW_SAMPLE} games are dimmed.</div>`;

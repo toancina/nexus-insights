@@ -1294,3 +1294,7 @@ body.modal-open .page-scroll { overflow: hidden; }
     color: rgba(255, 255, 255, 0.55);
     white-space: pre-line;
 }
+
+/* Champions page: numbers inside their luck margin, and the sample-games label */
+.ch-build-wpa.is-muted, .ch-edge.is-muted { opacity: 0.55; }
+.ch-pool-note { margin: 0 0 var(--s2, 8px); }
