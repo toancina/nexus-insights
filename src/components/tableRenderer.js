@@ -111,7 +111,6 @@ function renderMatchRow(match, index, DDRAGON_BASE, QUEUE_NAMES, getChampionIcon
     const champIcon = getChampionIcon(match.championName);
     const csPerMin = match.gameDuration > 0 ? ((match.totalMinionsKilled || 0) / (match.gameDuration / 60)).toFixed(1) : '0.0';
     const csPerMinNum = parseFloat(csPerMin);
-    const durationMins = match.gameDuration > 0 ? Math.round(match.gameDuration / 60) : '?';
 
     // Get rank-based colors for KDA, CS/M, Damage, and KP
     const kdaRank = getRankFromKDA(kdaNum);
@@ -178,8 +177,6 @@ function renderMatchRow(match, index, DDRAGON_BASE, QUEUE_NAMES, getChampionIcon
             <td class="center">
                 ${match.teamPosition ? `<img src="${getPositionIcon(match.teamPosition)}" alt="${match.teamPosition}" class="position-icon" style="width: 28px; height: 28px; filter: brightness(0.8);" onerror="this.style.display='none'">` : '?'}
             </td>
-            <td class="center">${match.champLevel || '?'}</td>
-            <td class="center">${durationMins}m</td>
             <td class="center">${renderLpDelta(match.matchId)}</td>
             <td class="center">${match.kills}</td>
             <td class="center">${match.deaths}</td>
@@ -286,8 +283,6 @@ function renderMatchTable(matches, matchesData, DDRAGON_BASE, QUEUE_NAMES, getCh
                         <th class="center">Runes</th>
                         <th class="center">SP</th>
                         <th class="center">Position</th>
-                        <th class="center">Level</th>
-                        <th class="center">Duration</th>
                         <th class="center" title="LP gained or lost on this game. Only populated for games played with the app open — see the column for why.">LP</th>
                         <th class="center">K</th>
                         <th class="center">D</th>

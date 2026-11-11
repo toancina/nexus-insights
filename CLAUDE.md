@@ -154,7 +154,7 @@ src/
   - Time-insight mini-cards: Best Time of Day, Best Day of Week, Session Stamina (games 1-3/4-6/7+), Win/Loss Streaks
 - **Match History page**: the match table, filtered by the top bar, paginated with "Load 50 More / Load All"
 - **Coaching tab**: Solo/Duo only. Rank header, then three tabs (#98), one shown at a time: Game Report (‹ › to step back), Habits (tickets in Slipping / Needs work / Improving / On track, click for detail), Trends (area trends with sparklines, then collapsed Details). See "Coaching page (rewritten 2026-10)" below.
-- **Match table**: no Result column (the row colour says win/loss; MVP/SVP sits next to the champion). KDA is (K + A) / max(1, D) everywhere: no "Perfect".
+- **Match table**: no Result, Level or Duration column (the row colour says win/loss; MVP/SVP sits next to the champion). KDA is (K + A) / max(1, D) everywhere: no "Perfect".
 - **Expanded Match Rows**: clicking a match-table row expands an inline game timeline chart, a game report (#9) (win chance / gold lead / XP lead with event markers) and a full 10-player breakdown (both teams): team impact rank with MVP/SVP, items, runes, summoner spells, KDA, CS/min, damage, GD@15/XPD@15, pings, tower damage. Badge awards shown at the top. (The old full-screen Match Detail Modal was removed 2026-07 — it had become unreachable.)
 - **Setup Modal**: First-run flow — API key (password field), Summoner Name # Tag, Server (select; Region is derived from it and shown disabled), checked against Riot on Save (#74). Accessible anytime via the settings button.
 - **Item/Rune Tooltip**: Hover over any item icon or rune to see name + description.
