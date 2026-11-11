@@ -32,7 +32,7 @@ components), sqlite3, Node's built-in test runner (`npm test`).
 - Division list re-fetched at most once a day; a player's mastery re-checked after **7 days**; scan at most **3** pages per division; at most **15** match checks per player.
 - Timeline fetched only for games on the champion; game + row stored only after both calls succeed.
 - Downloads yield to your sync, a live game and the Live page; stop on 401/403 with no toast.
-- Curve: fit needs ≥ **300** games; held-out check: every 10% band with ≥ **100** frames within **5** points, and log loss below the hand-tuned curve's. Refit after **25** new games or **7 days**.
+- Curve: fit needs ≥ **300** games; held-out check: log loss below the hand-tuned curve's, no 10% band with ≥ **100** frames more than **10** points off, worst band no worse than the hand-tuned curve's (ruling, Task 8). Refit after **25** new games or **7 days**.
 - WPA (fitted): `(win ? 100 : 0) − chance at purchase`; margin `1.96 · √Σp(100−p) / n`; "–" under **5** games; muted when the margin includes 0; "better" only when the gap > `√(m₁² + m₂²)`.
 - Rune number: page win rate − champion win rate over the same games (points), binomial margin `1.96 · √(wr(1−wr)/n) · 100`.
 - No JSON blobs read for refits or display (CLAUDE.md "Lazy JSON Loading").

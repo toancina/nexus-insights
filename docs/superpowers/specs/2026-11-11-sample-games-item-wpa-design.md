@@ -225,9 +225,13 @@ Only with the switch on. Off = the hand-tuned curve, unchanged.
 - **Fitted** by logistic regression in plain JS (no new dependency) on every
   stored timeline frame with a known result: your games plus sample games.
   ~750 games × ~30 frames fits in well under a second.
-- **Checked before use** on games held out of the fit: in each 10% band with
-  enough frames, the predicted and actual win rates are within 5 points, and
-  it beats the hand-tuned curve on log loss. If either fails, or there are
+- **Checked before use** on games held out of the fit: it beats the
+  hand-tuned curve on log loss, no 10% band with enough frames is more than
+  10 points from the actual win rate, and its worst band is no worse than the
+  hand-tuned curve's. (Was 5 points; changed during the build: on 598 real
+  games the fitted curve was 0–7 points off with 125 games held out, the
+  hand-tuned one up to 19, so 5 points would have kept the worse curve.)
+  If any of these fails, or there are
   fewer than 300 games, the hand-tuned curve stays in use and the Settings
   status says so.
 - **Refit** after 25 new games (yours + samples) or after a week, whichever
