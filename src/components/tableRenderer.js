@@ -4,7 +4,8 @@
 const { escapeHtml } = require('./dom');
 const { itemImg } = require('./itemIcon');
 const { decodePurchases, lastBoughtAt } = require('../services/itemBuild');
-const { lastPurchaseWpa, winChancePoints } = require('../services/itemWpa');
+const { lastPurchaseWpa } = require('../services/itemWpa');
+const winCurve = require('../services/winCurve');
 const { formatClock } = require('../services/matchTimeline');
 
 function getPositionIcon(teamPosition) {
@@ -128,7 +129,7 @@ function renderMatchRow(match, index, DDRAGON_BASE, QUEUE_NAMES, getChampionIcon
     const purchases = decodePurchases(match.itemPurchases);
     const bought = lastBoughtAt(purchases);
     // …and how your team's win chance moved after that purchase (#89)
-    const wpaAt = lastPurchaseWpa(purchases, winChancePoints(match.winChance, match.gameDuration));
+    const wpaAt = lastPurchaseWpa(purchases, winCurve.pointsFor(match));
     const itemSlot = itemId => {
         if (itemId && itemId > 0) {
             const w = wpaAt.get(itemId);

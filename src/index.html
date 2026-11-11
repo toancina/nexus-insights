@@ -723,6 +723,19 @@
                     <span class="setup-datadir-label">Missing games? A sync that was interrupted in the past can have skipped some. This fetches every game since the season started that isn't stored yet.</span>
                     <button type="button" class="setup-datadir-btn" onclick="fillGapsFromSettings()">Fill gaps</button>
                 </div>
+                <!-- Sample games (other players at your level and one above).
+                     Off by default; applies as soon as it's clicked, like the
+                     buttons above. See components/sampleGames.js. -->
+                <div class="setup-datadir setup-samples">
+                    <label class="setup-toggle">
+                        <input type="checkbox" id="setupSampleGames" onchange="setSampleGames(this.checked)">
+                        <span class="setup-toggle-text">
+                            <span class="setup-toggle-title">Download sample games from other players</span>
+                            <span class="setup-toggle-hint">Downloads a few games from the best players on your 3 most-played champions, at your rank and one rank above, to compare with and to sharpen WPA. Uses your API key; the first download takes 15–25 minutes in the background.</span>
+                        </span>
+                    </label>
+                    <p class="setup-samples-status" id="sampleGamesStatus" hidden></p>
+                </div>
                 <!-- Riot's developer policy asks public apps to carry this notice;
                      it lives here now instead of a footer on every page. -->
                 <p class="setup-legal">Nexus Insights isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc. Match data from the <a href="#" onclick="require('electron').shell.openExternal('https://developer.riotgames.com'); return false;">Riot Games API</a>.</p>

@@ -276,6 +276,71 @@ async function getRecentMatchIds(puuid, { queue = 420, count = 10 } = {}) {
     );
 }
 
+// ── Sample games (other players at your level and one above) ────────────────
+
+const SOLO_QUEUE = 'RANKED_SOLO_5x5';
+const APEX_PATHS = { MASTER: 'masterleagues', GRANDMASTER: 'grandmasterleagues', CHALLENGER: 'challengerleagues' };
+
+/** Entries without a PUUID can't be followed up; Riot's DTO has carried one since 2024. */
+let warnedNoPuuid = false;
+function withPuuid(entries) {
+    const list = Array.isArray(entries) ? entries : [];
+    const kept = list.filter(e => e && e.puuid);
+    if (kept.length < list.length && !warnedNoPuuid) {
+        warnedNoPuuid = true;
+        console.warn(`League entries without a puuid dropped (${list.length - kept.length})`);
+    }
+    return kept.map(e => ({ puuid: e.puuid, leaguePoints: e.leaguePoints, wins: e.wins, losses: e.losses }));
+}
+
+/** One page (~205 players) of a Solo/Duo division, e.g. ('SILVER', 'I', 1). */
+async function getLeagueEntries(tier, division, page = 1) {
+    const PLATFORM = getPlatform();
+    const entries = await riotGet(
+        `https://${PLATFORM}.api.riotgames.com/lol/league/v4/entries/${SOLO_QUEUE}/${tier}/${division}`,
+        { params: { page }, label: `league ${tier} ${division} page ${page}` }
+    );
+    return withPuuid(entries);
+}
+
+/** Every player in a Solo/Duo apex league (Master, Grandmaster, Challenger). */
+async function getApexLeague(tier) {
+    const path = APEX_PATHS[String(tier || '').toUpperCase()];
+    if (!path) throw new Error(`getApexLeague: ${tier} is not an apex tier`);
+    const PLATFORM = getPlatform();
+    const league = await riotGet(
+        `https://${PLATFORM}.api.riotgames.com/lol/league/v4/${path}/by-queue/${SOLO_QUEUE}`,
+        { label: `apex ${tier}` }
+    );
+    return withPuuid(league && league.entries);
+}
+
+/**
+ * A player's Solo/Duo-style match ids in a time window, newest first, one call
+ * (≤ 100). Times in ms; Riot takes seconds (as getMatchIds converts).
+ */
+async function getMatchIdsRange(puuid, { startTime = null, endTime = null, queue = null, count = 100 } = {}) {
+    const REGION = getRegion();
+    const params = { start: 0, count: Math.min(100, count) };
+    if (startTime) params.startTime = Math.floor(startTime / 1000);
+    if (endTime) params.endTime = Math.floor(endTime / 1000);
+    if (queue) params.queue = queue;
+    return riotGet(`https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids`,
+        { params, label: `ids range q=${queue}` });
+}
+
+/** A player's mastery on every champion they've played: [{ championId, championPoints, lastPlayTime }]. */
+async function getAllMasteries(puuid) {
+    const PLATFORM = getPlatform();
+    const list = await riotGet(
+        `https://${PLATFORM}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}`,
+        { label: 'masteries', timeout: 10000 }
+    );
+    return (Array.isArray(list) ? list : []).map(m => ({
+        championId: m.championId, championPoints: m.championPoints, lastPlayTime: m.lastPlayTime,
+    }));
+}
+
 /** Error summary that never includes the API key. */
 function describeError(error) {
     if (error.response) {
@@ -289,6 +354,7 @@ module.exports = {
     getMatchIds, getMatchData, getMatchTimeline,
     getPuuidByRiotId, getSummonerByPuuid, getLeagueByPuuid,
     getChampionMastery, getRecentMatchIds,
+    getLeagueEntries, getApexLeague, getAllMasteries, getMatchIdsRange,
     limiter, scrubKey,
     PLATFORM_ROUTING, routingFor, accountRoutingFor,
 };

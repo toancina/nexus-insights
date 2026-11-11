@@ -12,7 +12,8 @@
  * At most three points per section.
  */
 
-const { teamSeries, rosterOf, formatClock } = require('./matchTimeline');
+const { rosterOf, formatClock } = require('./matchTimeline');
+const winCurve = require('./winCurve');
 
 const REPORT_STATS = [
     { tab: 'Overview',     id: 'avg_kda',       label: 'KDA' },
@@ -130,7 +131,7 @@ function blunders(raw, timeline, participantId, teamId) {
     else if (pairs.length > 1) out.push(`Died twice within 3 minutes ${times(pairs.length)} (first around ${formatClock(pairs[0].timestamp)})`);
 
     // Win chance before / after each death, from the timeline's team series
-    const series = teamSeries(raw, timeline, teamId);
+    const series = winCurve.seriesFor(raw, timeline, teamId);
     if (series.length > 1) {
         const before = t => [...series].reverse().find(p => p.t <= t) || series[0];
         const after = t => series.find(p => p.t >= t + 60000) || series[series.length - 1];

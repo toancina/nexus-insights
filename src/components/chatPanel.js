@@ -515,6 +515,9 @@ function toolContext() {
         itemName: id => (getItemData(id) || {}).name || `Item ${id}`,
         runeName: id => (getRuneData(id) || {}).name || null,
         isCoreItem, isBuildItem, isExcludedItem,
+        // Sample games (other players) only while that Settings switch is on
+        ...(typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled()
+            ? { sampleRows: window.sampleRows || [], sampleGroups: window.sampleGroupsNow || [] } : {}),
     };
 }
 
@@ -529,6 +532,7 @@ function systemPrompt(ctx) {
         totalGames: ctx.matches.length,
         from: ctx.matches.length ? day(lo) : null,
         to: ctx.matches.length ? day(hi) : null,
+        samples: !!ctx.sampleRows,
     });
 }
 
@@ -599,7 +603,7 @@ async function send(rawText) {
     try {
         const result = await runAgent({
             messages,
-            tools: chatTools.toolSchemas(),
+            tools: chatTools.toolSchemas({ samples: !!ctx.sampleRows }),
             signal: state.abort.signal,
             describeCall: chatTools.describeCall,
             executeTool: (name, args) => chatTools.executeTool(name, args, ctx),

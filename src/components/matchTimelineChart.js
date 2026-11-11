@@ -10,6 +10,7 @@
  */
 
 const T = require('../services/matchTimeline');
+const winCurve = require('../services/winCurve');
 const { escapeHtml } = require('./dom');
 
 const METRICS = {
@@ -263,7 +264,7 @@ function onLeave(state) {
 // ---------------------------------------------------------------------------
 function refresh(state) {
     const v = state.viewer;
-    state.series = T.teamSeries(state.raw, state.timeline, v.teamId);
+    state.series = winCurve.seriesFor(state.raw, state.timeline, v.teamId);
     state.markers = T.visibleMarkers(state.events, { participantId: v.participantId, teamId: v.teamId, show: prefs.show });
     state.metric = prefs.metric;
     state.hover = null;
@@ -300,7 +301,7 @@ function renderMatchTimeline(host, match) {
     const youId = Number(Object.keys(roster).find(id =>
         roster[id].championName === match.championName && roster[id].teamId === match.teamId));
 
-    if (!timeline || !youId || T.teamSeries(raw, timeline, match.teamId).length < 2) {
+    if (!timeline || !youId || winCurve.seriesFor(raw, timeline, match.teamId).length < 2) {
         host.innerHTML = '<div class="mt-empty">No timeline stored for this game.</div>';
         return;
     }

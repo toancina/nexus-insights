@@ -1117,7 +1117,7 @@ body.modal-open .page-scroll { overflow: hidden; }
 /* Tables: Match History (and its expanded row), Champions, Matchups,
    Teammates, Roles, game report, death zones */
 :root { --table-head-bg: rgb(20, 22, 29); }
-:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) thead th {
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table, .coach-build-table) thead th {
     padding: 10px var(--s2);
     background: var(--table-head-bg);
     border-bottom: 1px solid var(--line-strong);
@@ -1131,18 +1131,18 @@ body.modal-open .page-scroll { overflow: hidden; }
     color: var(--text-secondary);
     white-space: nowrap;
 }
-:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) > tbody > tr:not(.expanded-row) > td {
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table, .coach-build-table) > tbody > tr:not(.expanded-row) > td {
     padding: var(--s2);
     border-top: 1px solid var(--line);
     border-bottom: 0;
     font-size: var(--t-body);
 }
-:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) > tbody > tr:first-child > td { border-top: 0; }
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table, .coach-build-table) > tbody > tr:first-child > td { border-top: 0; }
 :is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table) > tbody > tr:hover {
     transform: none;
     background: var(--surface-hover);
 }
-:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table) .num {
+:is(.match-table, .team-table-expanded, .ch-table, .ch-subtable, .tm-table, .rb-table, .gr-table, .dm-table, .coach-build-table) .num {
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
@@ -1284,3 +1284,27 @@ body.modal-open .page-scroll { overflow: hidden; }
 .chat-list-delete:hover { color: #fca5a5; background: rgba(239, 68, 68, 0.12); }
 /* "Ollama not running" under a saved chat's messages */
 .chat-problem--inline { align-self: center; }
+
+/* Settings → sample games: the switch fills the row; status lines under it */
+.setup-samples .setup-toggle { align-self: stretch; }
+.setup-samples-status {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.55);
+    white-space: pre-line;
+}
+
+/* Champions page: numbers inside their luck margin, and the sample-games label */
+.ch-build-wpa.is-muted, .ch-edge.is-muted { opacity: 0.55; }
+.ch-pool-note { margin: 0 0 var(--s2, 8px); }
+
+/* Coaching → Game Report → Build and runes (sample games) */
+.coach-build { margin-top: var(--s4); }
+.coach-build-items { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin: var(--s2) 0 var(--s3); }
+.coach-build-item { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-small, 12px); }
+.coach-build-item .coach-item { width: 28px; height: 28px; border-radius: 4px; }
+.coach-build-cell { display: flex; align-items: center; gap: 6px; }
+.coach-build-cell .coach-item { width: 22px; height: 22px; border-radius: 4px; }
+.coach-build-wpa.is-muted { opacity: 0.55; }
+.coach-build-better { margin-top: var(--s3); font-size: var(--t-small, 12px); }

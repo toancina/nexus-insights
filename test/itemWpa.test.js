@@ -157,3 +157,27 @@ test('itemTable: games without a curve count, but give no WPA', () => {
     assert.equal(rows[0].wpa, null);
     assert.equal(rows[0].wpaGames, 0);
 });
+
+test('wonVsExpected: result minus the chance at the purchase, with its variance', () => {
+    const pts = [{ t: 0, p: 40 }, { t: 2 * MIN, p: 40 }];
+    const [w] = W.wonVsExpected([{ itemId: 1, t: MIN }], pts, 1);
+    assert.deepEqual(w, { itemId: 1, t: MIN, from: 40, wpa: 60, v: 2400 });
+    assert.equal(W.wonVsExpected([{ itemId: 1, t: MIN }], pts, false)[0].wpa, -40);
+    assert.deepEqual(W.wonVsExpected([{ itemId: 1, t: MIN }], [], 1), [null]);
+});
+
+test('marginOf and beatsBeyondMargin', () => {
+    close(W.marginOf(2400 * 100, 100), 1.96 * Math.sqrt(240000) / 100);
+    assert.equal(W.marginOf(0, 0), null);
+    assert.equal(W.marginOf(NaN, 5), null);
+    assert.equal(W.beatsBeyondMargin({ wpa: 10, margin: 3 }, { wpa: 4, margin: 4 }), true);    // gap 6 > 5
+    assert.equal(W.beatsBeyondMargin({ wpa: 8, margin: 3 }, { wpa: 4, margin: 4 }), false);    // gap 4 < 5
+    assert.equal(W.beatsBeyondMargin({ wpa: 10, margin: null }, { wpa: 0, margin: 1 }), false);
+});
+
+test('itemTable rows carry a margin only when every entry has a variance', () => {
+    const g = (v) => ({ win: true, purchases: [{ itemId: 3078, t: 5 * MIN }], wpa: [{ itemId: 3078, t: 5 * MIN, wpa: 10, ...(v == null ? {} : { v }) }] });
+    const fitted = W.itemTable([g(2500), g(2500)]);
+    close(fitted[0].margin, 1.96 * Math.sqrt(5000) / 2);
+    assert.equal(W.itemTable([g(2500), g(null)])[0].margin, null);
+});

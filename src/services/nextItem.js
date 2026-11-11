@@ -16,7 +16,8 @@
  */
 
 const { decodePurchases } = require('./itemBuild');
-const { itemWpa, winChancePoints } = require('./itemWpa');
+const { marginOf, beatsBeyondMargin } = require('./itemWpa');
+const winCurve = require('./winCurve');
 
 const MIN_GAMES = 5;   // same as LOW_SAMPLE on the Champions page
 
@@ -52,11 +53,14 @@ function tally(games, steps, basis, owned) {
         if (!next) return;
         matched++;
         const g = games[i];
-        const c = counts.get(next.itemId) || { itemId: next.itemId, games: 0, wins: 0, wpaSum: 0, wpaGames: 0 };
+        const c = counts.get(next.itemId) || { itemId: next.itemId, games: 0, wins: 0, wpaSum: 0, wpaGames: 0, vSum: 0, noV: false };
         c.games++;
         if (g.win) c.wins++;
         const w = (g.wpa || [])[next.index];
-        if (w && Number.isFinite(w.wpa)) { c.wpaSum += w.wpa; c.wpaGames++; }
+        if (w && Number.isFinite(w.wpa)) {
+            c.wpaSum += w.wpa; c.wpaGames++;
+            if (Number.isFinite(w.v)) c.vSum += w.v; else c.noV = true;
+        }
         counts.set(next.itemId, c);
     });
     return { matched, counts };
@@ -74,8 +78,9 @@ function subsets(list, k, from = 0) {
 
 /** Ranked by average WPA when WPA has minGames games, else after those, by games. */
 function rankOptions(counts, minGames) {
-    const rows = [...counts.values()].map(({ wpaSum, ...c }) => ({
+    const rows = [...counts.values()].map(({ wpaSum, vSum, noV, ...c }) => ({
         ...c, winRate: c.wins / c.games, wpa: c.wpaGames ? wpaSum / c.wpaGames : null,
+        margin: c.wpaGames && !noV ? marginOf(vSum, c.wpaGames) : null,
     }));
     return [
         ...rows.filter(r => r.wpaGames >= minGames).sort((a, b) => b.wpa - a.wpa || b.games - a.games),
@@ -105,7 +110,19 @@ function nextItemOptions(games, owned, { isCompleted = () => true, minGames = MI
         if (level.matched >= minGames) { best = level; break; }
         if (!best || level.matched > best.matched) best = level;
     }
-    return { basis: best.basis, games: best.matched, options: rankOptions(best.counts, minGames) };
+    const options = rankOptions(best.counts, minGames);
+    return { basis: best.basis, games: best.matched, options, clearPick: clearPick(options, minGames) };
+}
+
+/**
+ * Whether the top option is a clear pick: it has a luck margin (only the
+ * fitted "won vs expected" WPA has one) and beats the next ranked option
+ * beyond both margins, or no other option has enough games.
+ */
+function clearPick(options, minGames) {
+    const [top, next] = options.filter(o => o.wpaGames >= minGames);
+    if (!top || top.margin == null) return false;
+    return !next || beatsBeyondMargin(top, next);
 }
 
 /**
@@ -113,16 +130,19 @@ function nextItemOptions(games, owned, { isCompleted = () => true, minGames = MI
  * since Match-V5 writes "FiddleSticks") that have purchase data, in `position`
  * when at least minRoleGames of them were played there, else in every role.
  */
-function championGames(matches, champion, position, { minRoleGames = MIN_GAMES } = {}) {
+function championGames(matches, champion, position, { minRoleGames = MIN_GAMES, extra = [] } = {}) {
     const name = String(champion || '').toLowerCase();
-    const mine = (matches || []).filter(m => m.itemPurchases && String(m.championName || '').toLowerCase() === name);
+    const onChamp = list => (list || []).filter(m => m.itemPurchases && String(m.championName || '').toLowerCase() === name);
+    const mine = onChamp(matches);
     const inRole = position ? mine.filter(m => (m.teamPosition || '') === position) : [];
     const useRole = inRole.length >= minRoleGames;
+    // Sample games (other players) join after the role rule, which is about you
+    const others = onChamp(extra).filter(m => !useRole || (m.teamPosition || '') === position);
     return {
         role: useRole ? position : null,
-        games: (useRole ? inRole : mine).map(m => {
+        games: [...(useRole ? inRole : mine), ...others].map(m => {
             const purchases = decodePurchases(m.itemPurchases);
-            return { purchases, win: !!m.win, wpa: itemWpa(purchases, winChancePoints(m.winChance, m.gameDuration)) };
+            return { purchases, win: !!m.win, wpa: winCurve.purchaseWpa(purchases, m) };
         }),
     };
 }

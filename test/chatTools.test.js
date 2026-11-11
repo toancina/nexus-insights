@@ -283,3 +283,52 @@ test('every tool has a schema the model can read', () => {
     // Schemas go with every request: keep them inside the context MODEL_OPTIONS sets in chatPanel.js
     assert.ok(JSON.stringify(T.toolSchemas()).length < 14000);
 });
+
+// ── Sample games (2026-11) ──────────────────────────────────────────────────
+const { sampleGroups } = require(path.join(SRC, 'services', 'sampleSelect.js'));
+const SAMPLE_GROUPS = sampleGroups({ tier: 'SILVER', rank: 'II' });
+const sampleRow = (tier, i, over = {}) => ({
+    ...itemGames[i % itemGames.length], matchId: `S-${tier}-${i}`, puuid: `p${i}`, tier, division: 'I',
+    queueId: 420, isRemake: 0, winChance: undefined, ...over,
+});
+const sampleCtx = {
+    ...itemsCtx, samplesEnabled: true, sampleGroups: SAMPLE_GROUPS,
+    sampleRows: [...[0, 1, 2].map(i => sampleRow('SILVER', i)), ...[3, 4].map(i => sampleRow('GOLD', i)), sampleRow('GOLD', 9, { championName: 'Zed' })],
+};
+
+test('toolSchemas: identical with samples off; on adds only get_item_stats.pool', () => {
+    const off = T.toolSchemas();
+    assert.deepEqual(T.toolSchemas({ samples: false }), off);
+    assert.ok(!JSON.stringify(off).includes('"pool"'));
+    const on = T.toolSchemas({ samples: true });
+    const items = on.find(s => s.function.name === 'get_item_stats').function.parameters.properties;
+    assert.deepEqual(items.pool.enum, ['all', 'mine', 'level', 'above']);
+    const stripped = JSON.parse(JSON.stringify(on));
+    delete stripped.find(s => s.function.name === 'get_item_stats').function.parameters.properties.pool;
+    assert.deepEqual(stripped, off);
+    assert.ok(JSON.stringify(on).length < 14000);
+});
+
+test('sample rows join only with a champion filter and Solo/Duo, and say so', async () => {
+    const withChamp = await T.executeTool('get_item_stats', { champion: 'Ahri' }, sampleCtx);
+    assert.deepEqual(withChamp.pool, { yours: 7, 'Silver I': 3, 'Gold I': 2 });
+    assert.equal(withChamp.games, 12);
+    assert.ok(Array.isArray(withChamp.rune_pages));
+    const noChamp = await T.executeTool('get_item_stats', {}, sampleCtx);
+    assert.equal(noChamp.pool, undefined);
+    assert.equal(noChamp.games, 7);
+    const flex = await T.executeTool('get_item_stats', { champion: 'Ahri', queue: 'flex' }, { ...sampleCtx, matches: [...itemsCtx.matches, makeMatch({ championName: 'Ahri', queueId: 440 })] });
+    assert.equal(flex.pool, undefined);
+    // Switch off: no sample games, no new fields
+    const off = await T.executeTool('get_item_stats', { champion: 'Ahri' }, itemsCtx);
+    assert.equal(off.pool, undefined);
+    assert.equal(off.rune_pages, undefined);
+});
+
+test('pool "above" uses only that group, "mine" only your games', async () => {
+    const above = await T.executeTool('get_item_stats', { champion: 'Ahri', pool: 'above' }, sampleCtx);
+    assert.equal(above.games, 2);
+    assert.deepEqual(above.pool, { yours: 0, 'Silver I': 0, 'Gold I': 2 });
+    const mine = await T.executeTool('get_item_stats', { champion: 'Ahri', pool: 'mine' }, sampleCtx);
+    assert.equal(mine.games, 7);
+});

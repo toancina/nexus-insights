@@ -218,3 +218,40 @@ test('championGames gives no WPA without a win-chance curve', () => {
     const [g] = championGames([row('Irelia', 'TOP', { winChance: '' })], 'Irelia', 'TOP', { minRoleGames: 1 }).games;
     assert.deepEqual(g.wpa, [null]);
 });
+
+test('options carry a margin when WPA entries have a variance', () => {
+    const g = (v) => ({ win: true, purchases: [{ itemId: 3071, t: 10 * MIN }, { itemId: 3053, t: 20 * MIN }],
+        wpa: [null, { itemId: 3053, t: 20 * MIN, wpa: 10, v }] });
+    const r = nextItemOptions([g(2500), g(2500)], [3071], { isCompleted, minGames: 1 });
+    assert.ok(Math.abs(r.options[0].margin - 1.96 * Math.sqrt(5000) / 2) < 1e-9);
+    const plain = nextItemOptions([game(true, [[3071, 10], [3053, 20, 5]])], [3071], { isCompleted, minGames: 1 });
+    assert.equal(plain.options[0].margin, null);
+});
+
+test('championGames adds extra rows after the role rule', () => {
+    const row = (over) => ({ championName: 'Yorick', teamPosition: 'TOP', itemPurchases: '3071:600', win: 1, gameDuration: 1800, ...over });
+    const mine = Array.from({ length: 5 }, () => row());
+    const extra = [row({ matchId: 'S1' }), row({ matchId: 'S2', teamPosition: 'JUNGLE' }), row({ matchId: 'S3', championName: 'Poppy' })];
+    const r = championGames(mine, 'Yorick', 'TOP', { extra });
+    assert.equal(r.role, 'TOP');
+    assert.equal(r.games.length, 6);     // your 5 TOP games + the TOP sample game
+    const anyRole = championGames(mine.slice(0, 2), 'Yorick', 'TOP', { extra });
+    assert.equal(anyRole.role, null);
+    assert.equal(anyRole.games.length, 4);
+});
+
+test('clearPick: true only when the top option beats the next beyond the luck margin', () => {
+    // Fitted entries carry a variance (v); the window WPA doesn't
+    const g = (next, wpa, v) => ({ win: true, purchases: [{ itemId: 3071, t: 10 * MIN }, { itemId: next, t: 20 * MIN }],
+        wpa: [null, { itemId: next, t: 20 * MIN, wpa, ...(v == null ? {} : { v }) }] });
+    const many = (next, wpa, v, n) => Array.from({ length: n }, () => g(next, wpa, v));
+    const opts = { isCompleted, minGames: 5 };
+    // gap 30, margins ~1.96·50/√20 ≈ 22 each → √(22²+22²) ≈ 31: too close
+    assert.equal(nextItemOptions([...many(3053, 20, 2500, 20), ...many(3074, -10, 2500, 20)], [3071], opts).clearPick, false);
+    // gap 60 → clear
+    assert.equal(nextItemOptions([...many(3053, 30, 2500, 20), ...many(3074, -30, 2500, 20)], [3071], opts).clearPick, true);
+    // the only option with enough games
+    assert.equal(nextItemOptions([...many(3053, 5, 2500, 6), ...many(3074, 9, 2500, 2)], [3071], opts).clearPick, true);
+    // window WPA (curve off): never a "clear pick" claim
+    assert.equal(nextItemOptions([...many(3053, 30, null, 20), ...many(3074, -30, null, 20)], [3071], opts).clearPick, false);
+});

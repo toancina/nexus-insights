@@ -97,6 +97,36 @@ function itemWpa(purchases, points) {
     });
 }
 
+/**
+ * "Won vs expected" (sample games, 2026-11): for each purchase, the game's
+ * result (100 for a win, 0 for a loss) minus your team's win chance at the
+ * purchase, in points. Averaged over many games it says how much more often
+ * games with the purchase were won than the game state predicted; only
+ * meaningful with a calibrated curve (winCurve.js decides). `v` is that game's
+ * variance, from(100 − from), for the luck margin.
+ */
+function wonVsExpected(purchases, points, win) {
+    const list = purchases || [];
+    if (!points || !points.length) return list.map(() => null);
+    const result = win === true || win === 1 ? 100 : 0;
+    return list.map(p => {
+        const from = chanceAt(points, p.t);
+        return { itemId: p.itemId, t: p.t, from, wpa: result - from, v: from * (100 - from) };
+    });
+}
+
+/** 95% luck margin of an average of n won-vs-expected values: 1.96·√Σv / n (points). */
+function marginOf(vSum, n) {
+    if (!n || !Number.isFinite(vSum)) return null;
+    return 1.96 * Math.sqrt(vSum) / n;
+}
+
+/** a beats b only when the gap is bigger than both margins combined. */
+function beatsBeyondMargin(a, b) {
+    if (!a || !b || a.margin == null || b.margin == null || !Number.isFinite(a.wpa) || !Number.isFinite(b.wpa)) return false;
+    return a.wpa - b.wpa > Math.sqrt(a.margin ** 2 + b.margin ** 2);
+}
+
 /** itemId → { from, to } (whole %) of its last purchase, for tooltips like "Bought at". */
 function lastPurchaseWpa(purchases, points) {
     const out = new Map();
@@ -121,18 +151,22 @@ function itemTable(games, isCounted = () => true) {
         (g.purchases || []).forEach((p, i) => {
             if (p.t <= STARTING_CUTOFF_MS || seen.has(p.itemId) || !isCounted(p.itemId)) return;
             seen.add(p.itemId);
-            const r = rows.get(p.itemId) || { itemId: p.itemId, games: 0, wins: 0, tSum: 0, wpaSum: 0, wpaGames: 0 };
+            const r = rows.get(p.itemId) || { itemId: p.itemId, games: 0, wins: 0, tSum: 0, wpaSum: 0, wpaGames: 0, vSum: 0, noV: false };
             r.games++;
             if (g.win) r.wins++;
             r.tSum += p.t;
             const w = g.wpa && g.wpa[i];
-            if (w) { r.wpaSum += w.wpa; r.wpaGames++; }
+            if (w) {
+                r.wpaSum += w.wpa; r.wpaGames++;
+                if (Number.isFinite(w.v)) r.vSum += w.v; else r.noV = true;
+            }
             rows.set(p.itemId, r);
         });
     }
-    return [...rows.values()].map(({ tSum, wpaSum, ...r }) => ({
+    return [...rows.values()].map(({ tSum, wpaSum, vSum, noV, ...r }) => ({
         ...r, winRate: r.wins / r.games, pickRate: games.length ? r.games / games.length : 0,
         avgT: tSum / r.games, wpa: r.wpaGames ? wpaSum / r.wpaGames : null,
+        margin: r.wpaGames && !noV ? marginOf(vSum, r.wpaGames) : null,
     })).sort((a, b) => b.games - a.games);
 }
 
@@ -153,4 +187,5 @@ module.exports = {
     TRIP_GAP_MS, WINDOW_CAP_MS,
     encodeWinChance, decodeWinChance, winChancePoints, seriesPoints, asStored, chanceAt,
     itemWpa, lastPurchaseWpa, itemTable, formatWpa, wpaLine,
+    wonVsExpected, marginOf, beatsBeyondMargin,
 };

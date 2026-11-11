@@ -1,7 +1,13 @@
 # Nexus Insights — Project Context
 
-> **Last updated**: 2026-10-20
+> **Last updated**: 2026-11-12
 > **Status**: Active development
+>
+> **2026-11 changes**: opt-in **sample games** (Settings, off by default):
+> other players' games on your top 3 champions at your rank and one rank up;
+> a **fitted win-chance curve**; item/rune WPA as "won vs expected" with a
+> luck margin on Champions, Live, Coaching ("Build and runes") and Chat. See
+> "Sample games" and "Fitted win chance" in Notes.
 >
 > **2026-10 changes** (details in the Notes section): fixed left nav rail,
 > Chat page (local Ollama), self-update from GitHub Releases (⟳ button),
@@ -81,6 +87,7 @@ src/
 │   ├── statHistory.js         # Click-a-card history chart
 │   ├── winRateColor.js        # Win-rate colour scale
 │   ├── updateButton.js        # ⟳ title-bar update button
+│   ├── sampleGames.js         # Settings → sample games: switch, status, download runs, holds
 │   ├── windowControls.js      # Frameless title bar: minimise / maximise / close
 │   ├── filtersPanel.js        # Queue/champion/role filter logic
 │   ├── matchCard.js           # Match row HTML helpers (icons, runes, spells, duration)
@@ -110,7 +117,8 @@ src/
 │   ├── matchTimeline.js       # Timeline series + events (#3)
 │   ├── gameReport.js          # Game report numbers (#9)
 │   ├── itemBuild.js           # Item purchases + build order (#7)
-│   ├── itemWpa.js             # Item WPA: win-chance change after a purchase (#89)
+│   ├── itemWpa.js             # Item WPA: win-chance change after a purchase (#89); won vs expected + margins
+│   ├── winFeatures.js / winModel.js / winCurve.js  # Fitted win-chance curve: inputs, model, the one curve every view reads
 │   ├── winChanceStats.js      # Win-chance curve in numbers: swings, throws, comebacks (Chat)
 │   ├── deathMap.js            # Death positions, density, zones (#8)
 │   ├── laneGaps.js            # Per-minute lane gaps (#12)
@@ -126,6 +134,8 @@ src/
 │   ├── liveClient.js          # League Live Client Data API
 │   ├── liveGame.js / liveGameLoader.js / liveGameStore.js  # Live page: rules, Riot calls, cache (#59)
 │   ├── riotErrors.js          # User-facing text for Riot API errors (sync + Live)
+│   ├── sampleSelect.js / sampleStore.js / sampleLoader.js  # Sample games: rules, tables, downloader
+│   ├── samplePool.js / buildReport.js  # Sample games: a champion's pool; Coaching's Build and runes
 │   └── paths.js / rateLimiter.js
 └── styles/
     ├── app.css                # Main stylesheet (dark theme, gold/teal accents)
@@ -1458,3 +1468,118 @@ and re-renders on every open.
   everyone Challenger), and Coaching's target is 100% in every role.
   `objectiveRate` moved from `LEGACY_STAT_COLUMNS` to `COMPUTED_STAT_COLUMNS`
   so the backfill rewrites it.
+
+### Sample games (2026-11)
+
+Settings → **Download sample games from other players** (bottom of the
+dialog, `config.sampleGames`, **off by default**, applies on click). Design:
+`docs/superpowers/specs/2026-11-11-sample-games-item-wpa-design.md`.
+
+- **What:** your top 3 champions by Solo/Duo games over the last 2 patches
+  (`sampleSelect.topChampions`); for each, the 5 players with the most mastery
+  on it (played in the last 90 days) in division I of your tier (`level`) and
+  division I of the next tier (`above`; apex: Master → GM → Challenger), 5 of
+  their Solo/Duo games on that champion each. Unranked → nothing.
+- **How** (`sampleLoader.js`, tested with a fake API/store): division list
+  pages (League-V4 `entries`, ~205 players, cached a day, ≤ 3 pages, until 5
+  candidates per champion), one `champion-masteries/by-puuid` call per player
+  (cached 7 days), then per player one `getMatchIdsRange` call: Solo/Duo ids
+  from 90 days ago **up to 3 h after mastery's `lastPlayTime` for that
+  champion**, so their games on it come first; each unhandled id costs one
+  match call, and only games on the champion get the timeline call. ≤ 15
+  checks per player. 404 = skip; 401/403 stops (`stopped: 'key'`).
+  Live check (2026-11-12, Silver I Yorick): ids up to "now" found 2 Yorick
+  games in 67 checks (the top-mastery players had last played him 26–46 days
+  before); bounded by `lastPlayTime`, 11 in 60. A first page costs ~205
+  mastery calls (~4 min on a dev key, 429s absorbed by the limiter).
+- **Tables** (`sampleStore.js`, never joined into `matches`): `sample_games`
+  (+ gzipped blobs), `sample_rows` (the picked player's row, tier + division
+  it was picked from), `sample_skips`, `sample_players` (`listedAt` = the list
+  fetch they were seen on), `sample_lists`. Readers join rows to games, so a
+  half-saved game is invisible. Apex division is stored as ''.
+- **When:** after every successful sync (`syncPanel` → `runSampleDownload`),
+  in the background. `holdSampleDownload(name)` pauses it: `'sync'`, `'live'`
+  (watcher sees a game), `'live-page'` (Live page loading). A request during a
+  run queues one more run. `pruneSampleGames()` at startup (on or off) drops
+  everything past 90 days.
+- **Status line** under the switch: last download and counts per champion and
+  group, or why nothing happened (no rank, no recent games, key, paused).
+- `window.sampleRows` / `window.sampleGroupsNow`: what pages read (`[]` while
+  off). A row counts only while its tier + division is one of your current
+  groups (`sampleSelect.groupOf`).
+- Live check (2026-11-11): a Silver I page is 205 entries, all with `puuid`.
+
+### Fitted win chance and WPA "won vs expected" (2026-11)
+
+Only while the sample-games switch is on. Off = today's curve and WPA.
+
+- **Inputs** (`services/winFeatures.js`, pure, tested): per timeline frame,
+  team 100 minus team 200: gold, XP, player kills, towers, inhibitors down
+  (5 min respawn), elemental dragons, soul, Baron buff (3 min), Elder buff
+  (2.5 min), and the minute. Stored as `matches.winFeatures` /
+  `sample_games.winFeatures` (`"m,g,x,k,t,i,d,s,b,e;…"`), written by
+  `computeAdvancedStatsForMatch` always, backfilled for old games **only while
+  the switch is on** (`backfillComputedStats(_, { winFeatures })`).
+- **Model** (`services/winModel.js`, pure, tested): logistic regression on
+  `[g, x, k, towers, inhibs, dragons, soul, baron, elder, g·τ, x·τ, k·τ]`
+  (g, x per 1000, τ = minute/30), no intercept, so both sides add to 100%.
+  Newton/IRLS with L2 = 1. Needs 300 games; ~20% held out by match id; used
+  only when its log loss beats the hand-tuned curve, no 10% band (≥ 100
+  frames) is more than 10 points off, and its worst band is no worse than the
+  hand-tuned one's. Real data (598 games, 2026-11-11): log loss 0.552 vs
+  0.672, bands 0–7 points off vs up to 19. (The design said 5 points; 125
+  held-out games can't resolve that, and L2 up to 1000 didn't change it.)
+  Refit after 25 more games or 7 days (`needsRefit`), saved as
+  `config.winModel`. Fitting 600 games takes ~0.1 s.
+- **`services/winCurve.js`** decides the curve: `configure({ enabled, model })`
+  (from `applyWinCurveSetting()`), `pointsFor(match)`, `seriesFor(raw,
+  timeline, teamId)`, `purchaseWpa(purchases, match)`. Every reader goes
+  through it (chart, expanded rows, game report, Chat, Champions, Next item,
+  Match History tooltips). The stored `winChance` column stays the hand-tuned
+  curve. A sample row has no stored curve; without a model it is rebuilt from
+  its features.
+- **WPA when fitted** (`itemWpa.wonVsExpected`): result (100 / 0) minus the
+  chance at the purchase; average over games; luck margin
+  `1.96·√Σ from(100−from) / n` (`marginOf`); rows from `itemTable`,
+  `itemBuild.rateRows` and `nextItemOptions` carry `margin` (null for the
+  window WPA). `beatsBeyondMargin(a, b)`: gap > √(m₁² + m₂²). Single-game
+  values (tooltips, Chat's one-game items) stay the window rule.
+- **Rune pages** (`championStats.championDetail`): `edge` = page win rate −
+  champion win rate (points), `edgeMargin` binomial 95% (a 3/3 page uses
+  (wins+1)/(games+2)).
+- Turning the switch on runs a quiet sync (indexes the features, then
+  downloads); `maybeRefitWinModel()` runs after every download.
+
+### Where sample games show (2026-11)
+
+All of it only while the switch is on; off, every page is as before.
+
+- **Champions page:** `samplePool.championPool(matches, sampleRows, champion,
+  { role, period, groups, patchSource })` = your games + current-group sample
+  rows under the same role and period ("last N patches" = your N newest).
+  Only the **Rune pages** table (gains a WPA column: `edge` ± `edgeMargin`) and
+  the **Build order** card use it; a label says "From N games: yours … ·
+  Silver I … · Gold I … · runes and build order only". Numbers inside their
+  margin are greyed (`is-muted`), with "± n" in the tooltip; the note under
+  Build order explains won vs expected when the curve is fitted.
+- **Live → Next item:** `championGames(..., { extra: sampleRows })` (sample
+  games join after the role rule, which is about you). `nextItemOptions`
+  returns `clearPick` (top beats the next beyond both margins, or is the only
+  one with 5+ games; never with the window WPA); otherwise the card says "Too
+  close to call". The card's cache key includes the switch/sample state.
+- **Coaching → Game Report → Build and runes** (`services/buildReport.js`,
+  pure, tested): your finished items with time vs your usual time (your other
+  games on the champion), each item's and your rune page's number over the
+  pool (this game left out), a You / Silver I / Gold I table of the most
+  common 1st/2nd/3rd item and keystone with shares, and at most one "better
+  option" (another item in the same slot beyond both margins; never without
+  the fitted curve). No sample rows → one line saying why.
+- **Chat:** `toolSchemas({ samples })` adds `pool` (all / mine / level /
+  above) to `get_item_stats` only while on (off = byte-identical schemas;
+  test). Sample rows join only with a `champion` filter, a queue including
+  Solo/Duo, and no `lane_opponent` / `last_n_games`; the same `applyFilters`
+  runs over them. Output adds `pool` counts, `rune_pages` (wpa = edge) and
+  `wpa_margin`. One system-prompt line (only while on): numbers whose margin
+  includes 0 are not evidence. One game's items (`get_game_detail`) keep the
+  window WPA, like the tooltips.
+

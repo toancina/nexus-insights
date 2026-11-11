@@ -108,3 +108,11 @@ test('system prompt states the rules that keep numbers honest', () => {
     assert.match(p, /Toan#GGWP/);
     assert.match(p, /1666/);
 });
+
+test('system prompt: the sample-games line only while sample games are on', () => {
+    const base = { player: 'P#1', today: '2026-11-11', totalGames: 10, from: '2026-06-01', to: '2026-11-10' };
+    assert.equal(buildSystemPrompt(base), buildSystemPrompt({ ...base, samples: false }));
+    const on = buildSystemPrompt({ ...base, samples: true });
+    assert.match(on, /margin includes 0 are not evidence/);
+    assert.ok(!/margin includes 0/.test(buildSystemPrompt(base)));
+});
