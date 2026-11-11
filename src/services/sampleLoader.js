@@ -12,7 +12,7 @@
  *      champion (mastery's lastPlayTime), newest first, so their games on it
  *      come first even when they've played other champions since: every id
  *      not handled yet costs one match call to see the champion; only games
- *      on that champion get the timeline call and are stored. 5 stored games
+ *      on that champion get the timeline call and are stored. 10 stored games
  *      or MAX_CHECKS_PER_PLAYER checks end a player. (Live check 2026-11-12:
  *      ids up to "now" found 2 Yorick games in 67 checks; the top-mastery
  *      Silver I Yorick players had last played him 26–46 days before.)
@@ -31,7 +31,7 @@ const { DAY_MS, RETENTION_MS, PLAYERS_PER_GROUP, GAMES_PER_PLAYER, pickBestPlaye
 const MAX_PAGES = 3;
 const LIST_TTL_MS = DAY_MS;
 const MASTERY_TTL_MS = 7 * DAY_MS;
-const MAX_CHECKS_PER_PLAYER = 15;
+const MAX_CHECKS_PER_PLAYER = 30;
 // lastPlayTime is around the game's start or end: take ids until 3 h after it
 const LAST_PLAY_SLACK_MS = 3 * 3600 * 1000;
 const SOLO_QUEUE = 420;
@@ -52,8 +52,10 @@ function isRemakeGame(info, me) {
 /**
  * One downloaded game → what sampleStore.saveGame takes; null for a remake or
  * when `puuid` isn't in the game. tier/division are set by the loader.
+ * `statsOf(raw, timeline, puuid)` (matchService.statsRowFor) adds the player's
+ * full stats row, stored as JSON, so Coaching can compute every stat for them.
  */
-function sampleGameFrom(raw, timeline, puuid) {
+function sampleGameFrom(raw, timeline, puuid, statsOf = null) {
     const info = raw && raw.info;
     const me = participantOf(raw, puuid);
     if (!info || !me || isRemakeGame(info, me)) return null;
@@ -70,6 +72,8 @@ function sampleGameFrom(raw, timeline, puuid) {
         secondaryRuneStyle: me.perks?.styles?.[1]?.style || null,
     };
     for (const c of ITEMS) row[c] = me[c] || 0;
+    const stats = statsOf ? statsOf(raw, timeline, puuid) : null;
+    row.stats = stats ? JSON.stringify(stats) : null;
     return {
         game: {
             matchId, gameCreation: info.gameCreation, gameDuration: info.gameDuration,
@@ -89,7 +93,7 @@ function masteryMap(list, since) {
     return out;
 }
 
-function createSampleLoader({ api, store, now = Date.now }) {
+function createSampleLoader({ api, store, now = Date.now, statsOf = null }) {
     async function run({ champions, groups, selfPuuid = null, shouldStop = () => null, onProgress = () => {} } = {}) {
         const result = { stored: 0, checked: 0, calls: 0, found: {}, stopped: null, message: null };
         for (const c of champions || []) result.found[c.name] = {};
@@ -193,7 +197,7 @@ function createSampleLoader({ api, store, now = Date.now }) {
                     known.add(id);
                     continue;
                 }
-                const built = sampleGameFrom(raw, timeline, puuid);
+                const built = sampleGameFrom(raw, timeline, puuid, statsOf);
                 if (!built) { await store.saveSkip(id, puuid, info.gameCreation); known.add(id); continue; }
                 built.row.tier = group.tier;
                 built.row.division = group.division;

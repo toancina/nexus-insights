@@ -17,11 +17,11 @@ const sampleStore = require('../services/sampleStore');
 const { createSampleLoader } = require('../services/sampleLoader');
 const { topChampions, sampleGroups, championKeyOf, groupOf, PLAYERS_PER_GROUP } = require('../services/sampleSelect');
 const { getChampionList } = require('../services/dataDragon');
-const { getLpReadings } = require('../services/matchService');
+const { getLpReadings, statsRowFor } = require('../services/matchService');
 const winCurve = require('../services/winCurve');
 const { buildModel, needsRefit, MIN_GAMES } = require('../services/winModel');
 
-const loader = createSampleLoader({ api: riotApi, store: sampleStore });
+const loader = createSampleLoader({ api: riotApi, store: sampleStore, statsOf: statsRowFor });
 const holds = new Set();
 let running = null;
 let runAgain = false;
@@ -106,6 +106,8 @@ window.loadSampleRows = async function () {
     }
     try {
         window.sampleGroupsNow = await currentGroups();
+        // Games downloaded before rows carried stats get them from the stored blobs, once
+        await sampleStore.fillMissingStats(statsRowFor);
         window.sampleRows = await sampleStore.getSampleRows();
     } catch (err) {
         console.warn('Loading sample games failed:', err.message);

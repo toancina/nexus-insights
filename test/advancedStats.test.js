@@ -203,3 +203,27 @@ test('winFeatures: one frame per timeline frame, from team 100\'s side; \'\' wit
     assert.equal(red.winFeatures, s.winFeatures);
     assert.equal(compute(match, null).winFeatures, '');
 });
+
+test('statsRowFor: one player\'s matches-row columns plus the computed stats, for sample games', () => {
+    const { statsRowFor, matchRowFrom } = require(path.join(SRC, 'services', 'matchService.js'));
+    const match = makeMatch(), timeline = makeTimeline();
+    match.info.queueId = 420;
+    match.info.teams = [{ teamId: 100, win: true, objectives: { dragon: { kills: 3 }, tower: { kills: 7 } } },
+        { teamId: 200, win: false, objectives: { dragon: { kills: 1 } } }];
+    const row = statsRowFor(match, timeline, 'p3');
+    assert.equal(row.matchId, 'EUW1_1');
+    assert.equal(row.championName, 'Ahri');
+    assert.equal(row.kills, 4);
+    assert.equal(row.teamKills, 4 + 1 + 1 + 1 + 1);
+    assert.equal(row.teamDragons, 3);
+    assert.equal(row.enemyDragons, 1);
+    assert.equal(row.teamTowers, 7);
+    assert.equal(row.queueId, 420);
+    // the same computed stats your own games get
+    const adv = computeAdvancedStatsForMatch(match, timeline, 'Ahri', 100);
+    assert.equal(row.cs15, adv.cs15);
+    assert.equal(row.dmgShare, adv.dmgShare);
+    assert.equal(row.winFeatures, adv.winFeatures);
+    assert.deepEqual(matchRowFrom(match.info, match.info.participants[2]).kills, 4);
+    assert.equal(statsRowFor(match, timeline, 'nobody'), null);
+});

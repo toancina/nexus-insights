@@ -4,7 +4,7 @@
  * Sample games are other players' Solo/Duo games on your 3 most-played
  * champions: the 5 players with the most mastery on that champion at your
  * level (division I of your tier) and one level above (division I of the next
- * tier), 5 games each, kept for 90 days. They feed item/rune WPA, the fitted
+ * tier), 10 games each, kept for 90 days. They feed item/rune WPA, the fitted
  * win-chance curve and Coaching's comparisons; never your own statistics.
  */
 
@@ -13,7 +13,7 @@ const { filterByPeriod } = require('./patches');
 const DAY_MS = 86400000;
 const TOP_CHAMPIONS = 3;
 const PLAYERS_PER_GROUP = 5;
-const GAMES_PER_PLAYER = 5;
+const GAMES_PER_PLAYER = 10;
 const RETENTION_MS = 90 * DAY_MS;
 const SOLO_QUEUE = 420;
 
