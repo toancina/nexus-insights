@@ -14,7 +14,8 @@ const { computeTeamImpact, IMPACT_AREAS } = require('../services/teamImpact');
 const { renderMatchTimeline } = require('./matchTimelineChart');
 const { renderGameReport } = require('./gameReportPanel');
 const { purchasesFromTimeline, lastBoughtAt } = require('../services/itemBuild');
-const { formatClock, teamSeries } = require('../services/matchTimeline');
+const { formatClock } = require('../services/matchTimeline');
+const winCurve = require('../services/winCurve');
 const { lastPurchaseWpa, asStored } = require('../services/itemWpa');
 const {
     RUNE_ICONS,
@@ -136,7 +137,7 @@ function buildTeamData(match) {
 
         // Each team's win chance, for the WPA line in item tooltips (#89)
         const seriesOf = timeline
-            ? { 100: teamSeries(matchData, timeline, 100), 200: teamSeries(matchData, timeline, 200) }
+            ? { 100: winCurve.seriesFor(matchData, timeline, 100), 200: winCurve.seriesFor(matchData, timeline, 200) }
             : null;
 
         // Build position map for lane-opponent lookups

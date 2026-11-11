@@ -18,7 +18,8 @@ const { getChampionIcon, RUNE_ICONS } = require('./matchCard');
 const { escapeHtml, formatInt } = require('./dom');
 const { wrTextColor, LOW_SAMPLE } = require('./winRateColor');
 const { decodePurchases, buildOrderTable, firstBackStats, firstBackAt } = require('../services/itemBuild');
-const { itemWpa, winChancePoints, formatWpa } = require('../services/itemWpa');
+const { formatWpa } = require('../services/itemWpa');
+const winCurve = require('../services/winCurve');
 const { formatClock } = require('../services/matchTimeline');
 
 const COLUMNS = [
@@ -138,7 +139,7 @@ function renderBuildOrder(matches, champion, role) {
             return {
                 purchases, win: m.win === 1, firstBackAt: firstBackAt(purchases),
                 finalItems: [m.item0, m.item1, m.item2, m.item3, m.item4, m.item5],
-                wpa: itemWpa(purchases, winChancePoints(m.winChance, m.gameDuration)),   // #89
+                wpa: winCurve.purchaseWpa(purchases, m),   // #89; won vs expected when fitted
             };
         });
     if (!games.length) {

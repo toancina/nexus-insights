@@ -20,8 +20,9 @@ const { comparePatchDesc } = require('../services/patches');
 const { compareGame, comparisonPools, highlights, blunders, REPORT_STATS } = require('../services/gameReport');
 const { decodePurchases, encodePurchases, purchasesFromTimeline, firstBackAt, buildOrderTable, firstBackStats } =
     require('../services/itemBuild');
-const { itemWpa, itemTable, winChancePoints, asStored } = require('../services/itemWpa');
-const { teamSeries, timelineEvents, formatClock } = require('../services/matchTimeline');
+const { itemWpa, itemTable, asStored } = require('../services/itemWpa');
+const { timelineEvents, formatClock } = require('../services/matchTimeline');
+const winCurve = require('../services/winCurve');
 const { computeTeamImpact } = require('../services/teamImpact');
 const { decodeDeaths, zoneOf, ZONE_LABELS } = require('../services/deathMap');
 const { curveSummary, winChanceStats, THROW_PEAK, COMEBACK_LOW, AHEAD_AT_15, BEHIND_AT_15 } =
@@ -291,9 +292,9 @@ async function gameDetail(args, ctx) {
     const full = !!(raw && timeline && pid !== null);
 
     // Stored columns first (what the Champions page and tooltips use), the timeline for games not indexed yet
-    let points = winChancePoints(game.winChance, game.gameDuration);
+    let points = winCurve.pointsFor(game);
     let purchases = decodePurchases(game.itemPurchases);
-    if (full && points.length < 2) points = asStored([], teamSeries(raw, timeline, game.teamId), game.gameDuration).points;
+    if (full && points.length < 2) points = asStored([], winCurve.seriesFor(raw, timeline, game.teamId), game.gameDuration).points;
     if (full && !purchases.length) purchases = decodePurchases(encodePurchases(purchasesFromTimeline(timeline, pid)));
     const events = full ? timelineEvents(raw, timeline) : [];
 
@@ -350,7 +351,7 @@ function itemStats(args, ctx) {
         return {
             purchases, win: isWin(m), firstBackAt: firstBackAt(purchases),
             finalItems: [m.item0, m.item1, m.item2, m.item3, m.item4, m.item5],
-            wpa: itemWpa(purchases, winChancePoints(m.winChance, m.gameDuration)),
+            wpa: winCurve.purchaseWpa(purchases, m),
         };
     });
     const base = { filters: f.description, games: f.matches.length, games_with_purchase_data: games.length };
@@ -459,7 +460,7 @@ function breakdown(args, ctx) {
 function winChancePatterns(args, ctx) {
     const f = filtered(ctx, args);
     if (f.error) return { error: f.error };
-    const games = f.matches.map(m => ({ m, win: isWin(m), points: winChancePoints(m.winChance, m.gameDuration) }));
+    const games = f.matches.map(m => ({ m, win: isWin(m), points: winCurve.pointsFor(m) }));
     const s = winChanceStats(games);
     const base = { filters: f.description, games: f.matches.length, games_with_win_chance: s.games };
     if (!s.games) return { ...base, error: 'No win-chance data for these games yet. It needs a stored timeline.' };

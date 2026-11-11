@@ -110,3 +110,18 @@ test('no deaths, no blunders; at most three', () => {
     const many = rawAndTimeline([{ t: MIN, killer: 7 }, { t: 2 * MIN, killer: 7 }, { t: 3 * MIN, killer: 7 }, { t: 10 * MIN, killer: 8 }]);
     assert.equal(R.blunders(many.raw, many.timeline, 1, 100).length, 3);
 });
+
+test('blunders use the fitted curve when one is configured', () => {
+    const winCurve = require(path.join(SRC, 'services', 'winCurve.js'));
+    const gold = m => (m <= 20 ? m * 25 : 500 - (m - 20) * 600);
+    const { raw, timeline } = rawAndTimeline([{ t: 20.2 * MIN, killer: 9 }], { gold });
+    // A model that reads a gold lead backwards: the team that was "ahead" is now behind
+    winCurve.configure({ enabled: true, model: { ok: true, coef: [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } });
+    try {
+        const b = R.blunders(raw, timeline, 1, 100);
+        assert.ok(!b.some(x => /while your team was ahead/.test(x)), b.join(' | '));
+    } finally {
+        winCurve.configure({ enabled: false, model: null });
+    }
+    assert.equal(R.blunders(raw, timeline, 1, 100)[0], '1 death while your team was ahead (win chance 60%+)');
+});
