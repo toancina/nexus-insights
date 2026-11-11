@@ -21,7 +21,7 @@ function stripThink(text) {
         .replace(/^\s+/, '');
 }
 
-function buildSystemPrompt({ player, today, totalGames, from, to }) {
+function buildSystemPrompt({ player, today, totalGames, from, to, samples = false }) {
     return [
         `You are the Nexus Insights assistant. You answer questions about ${player || 'the player'}'s League of Legends games, which are stored in this app.`,
         `Today is ${today}. Stored games: ${totalGames}${from ? ` (from ${from} to ${to})` : ''}. Remakes are excluded from all stats.`,
@@ -36,6 +36,9 @@ function buildSystemPrompt({ player, today, totalGames, from, to }) {
         '- Mention how many games a number is based on when it is small; under 10 games is not reliable.',
         '- Rank tiers (iron … challenger) on a stat compare it with typical players of that rank.',
         '- Give practical League advice when asked, but base claims about this player on the data.',
+        ...(samples ? [
+            '- With a champion, get_item_stats also counts sample games from other players at the user\'s rank and one rank up (pool picks whose). Its WPA is then how much more often games with the item were won than the game state predicted. Numbers whose ± margin includes 0 are not evidence for or against an option; say so instead of recommending.',
+        ] : []),
     ].join('\n');
 }
 

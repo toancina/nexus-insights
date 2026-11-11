@@ -14,7 +14,7 @@
  */
 
 const {
-    QUEUE_LABEL, ROLE_LABEL, FILTER_PROPS, norm, posInt, parseDay, championMatcher, applyFilters, filterOptions,
+    QUEUES, QUEUE_LABEL, ROLE_LABEL, FILTER_PROPS, norm, posInt, parseDay, championMatcher, applyFilters, filterOptions,
 } = require('./chatFilters');
 const { comparePatchDesc } = require('../services/patches');
 const { compareGame, comparisonPools, highlights, blunders, REPORT_STATS } = require('../services/gameReport');
@@ -23,6 +23,8 @@ const { decodePurchases, encodePurchases, purchasesFromTimeline, firstBackAt, bu
 const { itemWpa, itemTable, asStored } = require('../services/itemWpa');
 const { timelineEvents, formatClock } = require('../services/matchTimeline');
 const winCurve = require('../services/winCurve');
+const { groupOf } = require('../services/sampleSelect');
+const { championDetail } = require('../services/championStats');
 const { computeTeamImpact } = require('../services/teamImpact');
 const { decodeDeaths, zoneOf, ZONE_LABELS } = require('../services/deathMap');
 const { curveSummary, winChanceStats, THROW_PEAK, COMEBACK_LOW, AHEAD_AT_15, BEHIND_AT_15 } =
@@ -35,6 +37,8 @@ const LOW_SAMPLE = 5;    // an average WPA over fewer games isn't shown (as on t
 
 const WPA_NOTE = "WPA = average change in your team's estimated win chance from buying the item until your next " +
     'trip to the shop (at most 5 min). It shows how games went while you had the item, not what the item caused.';
+const WPA_FITTED_NOTE = 'WPA = how much more often games with the purchase were won than the game state at the purchase ' +
+    'predicted, in points; wpa_margin is its luck margin (a value within ± its margin is not evidence either way).';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -343,9 +347,31 @@ async function gameDetail(args, ctx) {
 // Many games: breakdowns, items, win chance
 // ---------------------------------------------------------------------------
 
+/**
+ * Sample games (other players at your level and one above, 2026-11) that may
+ * join an item answer: only while the switch is on (ctx.sampleRows), with a
+ * champion filter, a queue that includes Solo/Duo, and no filter that only
+ * makes sense for your own games (lane_opponent, last_n_games). The same
+ * filters run over them; each row is marked with its group.
+ */
+function sampleGamesFor(args, ctx) {
+    if (!ctx.sampleRows || !args.champion || args.lane_opponent || args.last_n_games) return null;
+    const queue = String(args.queue || 'all').toLowerCase();
+    if (queue !== 'all' && !(QUEUES[queue] || []).includes(420)) return null;
+    const f = applyFilters(ctx.sampleRows, args, { now: ctx.now ? ctx.now().getTime() : Date.now() });
+    if (f.error) return [];
+    return f.matches.map(r => ({ ...r, sample: groupOf(r, ctx.sampleGroups || []) })).filter(r => r.sample);
+}
+
 function itemStats(args, ctx) {
-    const f = filtered(ctx, args);
-    if (f.error) return { error: f.error };
+    const own = filtered(ctx, args);
+    if (own.error) return { error: own.error };
+    const samples = sampleGamesFor(args, ctx);
+    const poolArg = String(args.pool || 'all').toLowerCase();
+    const mine = samples && (poolArg === 'level' || poolArg === 'above') ? [] : own.matches;
+    const others = !samples || poolArg === 'mine' ? [] : poolArg === 'level' || poolArg === 'above'
+        ? samples.filter(r => r.sample === poolArg) : samples;
+    const f = { ...own, matches: [...mine, ...others] };
     const games = f.matches.filter(m => m.itemPurchases).map(m => {
         const purchases = decodePurchases(m.itemPurchases);
         return {
@@ -359,7 +385,8 @@ function itemStats(args, ctx) {
 
     const name = ctx.itemName || (id => `Item ${id}`);
     const wpaOf = r => (r.wpaGames >= LOW_SAMPLE ? round(r.wpa, 1) : undefined);
-    const rate = r => ({ games: r.games, pick_rate_pct: round(r.pickRate * 100, 0), win_rate_pct: round(r.winRate * 100, 1), avg_wpa: wpaOf(r) });
+    const marginOf = r => (r.wpaGames >= LOW_SAMPLE && r.margin != null ? Math.round(r.margin) : undefined);
+    const rate = r => ({ games: r.games, pick_rate_pct: round(r.pickRate * 100, 0), win_rate_pct: round(r.winRate * 100, 1), avg_wpa: wpaOf(r), wpa_margin: marginOf(r) });
     const minGames = Math.max(1, posInt(args.min_games) || 3);
     const limit = Math.min(30, posInt(args.limit) || 12);
     const sortKey = {
@@ -387,16 +414,33 @@ function itemStats(args, ctx) {
         };
     }
     const fb = firstBackStats(games);
+    // With sample games: whose games these are, and the rune pages over the same games
+    let poolInfo, runePages;
+    if (samples) {
+        poolInfo = { yours: mine.length };
+        for (const g of ctx.sampleGroups || []) poolInfo[g.label] = others.filter(r => r.sample === g.key).length;
+        const champName = (f.matches[0] || {}).championName;
+        runePages = champName ? championDetail(f.matches, champName).runes.slice(0, 6).map(r => ({
+            keystone: (ctx.runeName && ctx.runeName(r.keystone)) || `Rune ${r.keystone}`,
+            secondary_tree: (ctx.runeName && ctx.runeName(r.secondary)) || undefined,
+            games: r.games, win_rate_pct: round(r.winRate * 100, 1),
+            wpa: r.games >= LOW_SAMPLE && r.edge != null ? round(r.edge, 1) : undefined,
+            wpa_margin: r.games >= LOW_SAMPLE && r.edgeMargin != null ? Math.round(r.edgeMargin) : undefined,
+        })) : [];
+    }
     return {
         ...base,
+        pool: poolInfo,
         items,
+        rune_pages: runePages,
         build_order: buildOrder,
         first_back: fb.medianMs === null ? undefined : {
             median: formatClock(fb.medianMs), games: fb.games,
             win_rate_when_earlier_pct: fb.faster ? round(fb.faster.winRate * 100, 1) : null,
             win_rate_when_later_pct: fb.slower ? round(fb.slower.winRate * 100, 1) : null,
         },
-        note: `${WPA_NOTE} avg_wpa is left out under ${LOW_SAMPLE} games with a win-chance curve.`,
+        note: `${winCurve.isFitted() ? WPA_FITTED_NOTE : WPA_NOTE} avg_wpa is left out under ${LOW_SAMPLE} games with a win-chance curve.`
+            + (samples ? ' Rune page wpa = its win rate minus the champion\'s over the same games.' : ''),
     };
 }
 
@@ -748,11 +792,19 @@ const TOOLS = [
 ];
 
 /** Ollama/OpenAI-style tool schemas for the chat request. */
-function toolSchemas() {
-    return TOOLS.map(t => ({
-        type: 'function',
-        function: { name: t.name, description: t.description, parameters: t.parameters },
-    }));
+/** Only while sample games are on: whose games get_item_stats counts. */
+const POOL_PROP = {
+    type: 'string', enum: ['all', 'mine', 'level', 'above'],
+    description: 'With a champion: whose games. all (default), mine, level (players at your rank), above (one rank up).',
+};
+
+function toolSchemas({ samples = false } = {}) {
+    return TOOLS.map(t => {
+        const parameters = samples && t.name === 'get_item_stats'
+            ? { ...t.parameters, properties: { ...t.parameters.properties, pool: POOL_PROP } }
+            : t.parameters;
+        return { type: 'function', function: { name: t.name, description: t.description, parameters } };
+    });
 }
 
 /** Short human description of a tool call, for the "looked up…" line in the chat. */
