@@ -123,3 +123,15 @@ test('rows ignore games without WPA', () => {
     const none = B.buildOrderTable([{ win: true, finalItems: [6672], purchases: BUILD }]);
     assert.deepEqual([none.core[0][0].wpa, none.core[0][0].wpaGames], [null, 0]);
 });
+
+test('buildOrderTable rows carry a margin when the WPA entries have a variance, null otherwise', () => {
+    const MIN = 60000;
+    const game = (v) => ({ win: true, finalItems: [3078],
+        purchases: [{ itemId: 1055, t: 10000 }, { itemId: 3078, t: 9 * MIN }],
+        wpa: [{ itemId: 1055, t: 10000, wpa: 5, ...(v == null ? {} : { v }) }, { itemId: 3078, t: 9 * MIN, wpa: 20, ...(v == null ? {} : { v }) }] });
+    const fitted = B.buildOrderTable([game(1600), game(1600)]);
+    const row = fitted.core[0].find(r => r.key === 3078);
+    assert.ok(Math.abs(row.margin - 1.96 * Math.sqrt(3200) / 2) < 1e-9);
+    assert.equal(row.wpa, 20);
+    assert.equal(B.buildOrderTable([game(null)]).core[0].find(r => r.key === 3078).margin, null);
+});

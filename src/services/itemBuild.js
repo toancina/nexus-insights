@@ -105,18 +105,26 @@ function rateRows(games, keysOf, valueOf = null) {
         if (!keys.length) continue;
         withData++;
         for (const k of keys) {
-            const c = counts.get(k) || { key: k, games: 0, wins: 0, wpaSum: 0, wpaGames: 0 };
+            const c = counts.get(k) || { key: k, games: 0, wins: 0, wpaSum: 0, wpaGames: 0, vSum: 0, noV: false };
             c.games++;
             if (g.win) c.wins++;
-            const v = valueOf ? valueOf(g, k) : null;
-            if (Number.isFinite(v)) { c.wpaSum += v; c.wpaGames++; }
+            // valueOf gives an itemWpa entry ({ wpa, v? }) or a plain number
+            const raw = valueOf ? valueOf(g, k) : null;
+            const e = raw && typeof raw === 'object' ? raw : (Number.isFinite(raw) ? { wpa: raw } : null);
+            if (e && Number.isFinite(e.wpa)) {
+                c.wpaSum += e.wpa; c.wpaGames++;
+                if (Number.isFinite(e.v)) c.vSum += e.v; else c.noV = true;
+            }
             counts.set(k, c);
         }
     }
+    // Required here, not at the top: itemWpa.js requires this file
+    const { marginOf } = require('./itemWpa');
     return [...counts.values()]
-        .map(({ wpaSum, ...c }) => ({
+        .map(({ wpaSum, vSum, noV, ...c }) => ({
             ...c, winRate: c.wins / c.games, pickRate: withData ? c.games / withData : 0,
             wpa: c.wpaGames ? wpaSum / c.wpaGames : null,
+            margin: c.wpaGames && !noV ? marginOf(vSum, c.wpaGames) : null,
         }))
         .filter(c => c.pickRate >= MIN_PICK_RATE)
         .sort((a, b) => b.games - a.games);
@@ -133,7 +141,7 @@ function buildOrderTable(games, opts = {}) {
     const positions = games.map(g => ({ win: g.win, wpa: g.wpa || [], pos: buildPositions(g.purchases, g.finalItems, opts) }));
     // WPA of the opening shop: its first purchase. Of an item later on: its
     // first purchase after the opening shop, the one the row is about.
-    const firstWpa = (g, test) => { const w = g.wpa.find(e => e && test(e)); return w ? w.wpa : null; };
+    const firstWpa = (g, test) => g.wpa.find(e => e && test(e)) || null;
     const startWpa = g => firstWpa(g, e => e.t <= STARTING_CUTOFF_MS);
     const itemWpaOf = (g, id) => firstWpa(g, e => e.itemId === id && e.t > STARTING_CUTOFF_MS);
     return {
