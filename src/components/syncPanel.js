@@ -201,7 +201,7 @@ window.handleSync = async function (options = {}) {
         const computedResult = await backfillComputedStats((current, total) => {
             updateStatus('loading', 'Preparing Analytics', `${formatInt(current)}/${formatInt(total)} matches...`);
             updateProgress(current, total);
-        });
+        }, { winFeatures: typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled() });
         hideProgress();
 
         // Reload match history (skip rank fetch — already done above)

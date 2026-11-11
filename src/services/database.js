@@ -640,6 +640,7 @@ function initDatabase() {
       'itemPurchases TEXT',
       'deathPositions TEXT',
       'winChance TEXT',            // item WPA (#89)
+      'winFeatures TEXT',          // fitted win-chance curve inputs (sample games, 2026-11)
       'puuid TEXT'                 // whose game this is (#73)
     ];
     // Only ALTER for columns that are actually missing — the old code fired

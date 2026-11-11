@@ -231,3 +231,14 @@ test('sampleGameFrom builds the row; null for a remake or a missing player', () 
     assert.equal(L.sampleGameFrom(rawGame('X2', 'p', 'Yorick', { gameDuration: 200 }), timeline(), 'p'), null);
     assert.equal(L.sampleGameFrom(rawGame('X3', 'p', 'Yorick'), timeline(), 'nobody'), null);
 });
+
+test('sampleGameFrom sets winFeatures and blueWin', () => {
+    const red = rawGame('X9', 'p', 'Yorick');
+    red.info.participants[0].teamId = 200; red.info.participants[0].win = false;
+    red.info.teams = [{ teamId: 100, win: true }, { teamId: 200, win: false }];
+    const g = L.sampleGameFrom(red, timeline(), 'p');
+    assert.equal(g.game.blueWin, 1);
+    assert.equal(typeof g.game.winFeatures, 'string');
+    assert.equal(g.game.winFeatures.split(';').length, 2);
+    assert.equal(L.sampleGameFrom(rawGame('X8', 'p', 'Yorick'), null, 'p').game.winFeatures, '');
+});

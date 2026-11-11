@@ -1371,6 +1371,7 @@ async function catchUpSync() {
 }
 
 async function backfillAnalyticsInBackground() {
+    const withFeatures = typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled();
     try {
         // Rows indexed before these columns existed (#2, #4, #6, #12, #15)
         const pending = (window.matchesData || []).filter(
@@ -1379,12 +1380,13 @@ async function backfillAnalyticsInBackground() {
                  m.turretDamage == null ||  // #15
                  m.laneGaps == null ||      // #12
                  m.itemPurchases == null || m.deathPositions == null ||  // #7, #8
-                 m.winChance == null        // #89
+                 m.winChance == null ||     // #89
+                 (withFeatures && m.winFeatures == null)   // fitted curve, only with sample games on
         );
         if (pending.length === 0) return;
 
         console.log(`Indexing ${pending.length} matches for analytics...`);
-        const result = await backfillComputedStats();
+        const result = await backfillComputedStats(undefined, { winFeatures: withFeatures });
         if (result.done > 0) {
             // Pick up the newly written columns
             await window.loadMatchHistory(true);

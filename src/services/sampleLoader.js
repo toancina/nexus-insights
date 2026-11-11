@@ -20,6 +20,7 @@
 
 const { purchasesFromTimeline, encodePurchases } = require('./itemBuild');
 const { patchOf } = require('./patches');
+const { frameFeatures, encodeFeatures } = require('./winFeatures');
 const { friendlyRiotError, isKeyError } = require('./riotErrors');
 const { DAY_MS, RETENTION_MS, PLAYERS_PER_GROUP, GAMES_PER_PLAYER, pickBestPlayers } = require('./sampleSelect');
 
@@ -66,7 +67,8 @@ function sampleGameFrom(raw, timeline, puuid) {
     return {
         game: {
             matchId, gameCreation: info.gameCreation, gameDuration: info.gameDuration,
-            patch: patchOf(info.gameVersion), blueWin, winFeatures: null,
+            patch: patchOf(info.gameVersion), blueWin,
+            winFeatures: timeline ? encodeFeatures(frameFeatures(raw, timeline)) : '',
             rawJson: raw, timelineJson: timeline,
         },
         row,

@@ -191,3 +191,15 @@ test('turret and objective damage, first death time (#15)', () => {
     assert.equal(old.turretDamage, 0);
     assert.equal(old.objectiveDamage, 0);
 });
+
+test('winFeatures: one frame per timeline frame, from team 100\'s side; \'\' without a timeline', () => {
+    const { decodeFeatures, frameFeatures } = require(path.join(SRC, 'services', 'winFeatures.js'));
+    const match = makeMatch(), timeline = makeTimeline();
+    const s = compute(match, timeline);
+    assert.ok(s.winFeatures, 'written');
+    assert.deepEqual(decodeFeatures(s.winFeatures).map(f => f.gold), frameFeatures(match, timeline).map(f => f.gold));
+    // A player on team 200 stores the same team-100 features
+    const red = computeAdvancedStatsForMatch(match, timeline, match.info.participants.find(p => p.teamId === 200).championName, 200);
+    assert.equal(red.winFeatures, s.winFeatures);
+    assert.equal(compute(match, null).winFeatures, '');
+});
