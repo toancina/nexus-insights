@@ -42,6 +42,7 @@ window.require('./components/championsPanel'); // registers openChampionsPanel (
 window.require('./components/teammatesPanel'); // registers openTeammatesPanel (Teammates page)
 window.require('./components/liveGamePanel');  // registers openLiveGamePanel (Live page, #59)
 window.require('./components/periodFilter');   // registers updatePeriodDropdown, applyPeriodFilter, renderPatchWinRates
+window.require('./components/sampleGames');    // Settings → sample games: runSampleDownload, loadSampleRows, holds
 
 // Destructure named exports needed inside renderer.js itself
 const {
@@ -142,6 +143,8 @@ function showSetupModal(isFirstTime = true) {
     syncRegionToPlatform();
     // Both default on for a config saved before these settings existed
     document.getElementById('setupAutoLogGames').checked = config.autoLogGames !== false;
+    document.getElementById('setupSampleGames').checked = config.sampleGames === true;
+    if (typeof window.renderSampleStatus === 'function') window.renderSampleStatus();
     document.getElementById('setupCloseToTray').checked  = config.closeToTray  !== false;
     document.getElementById('setupStartOnLogin').checked = config.startOnLogin !== false;
     // main.js can register a login item on Windows and macOS, not on Linux
@@ -581,6 +584,8 @@ async function pollLiveClient() {
         if (inGame && !wasInGame) {
             wasInGame = true;
             gameSeenAt = Date.now();
+            // Riot's rate limit goes to this game's sync, not to sample games
+            if (typeof window.holdSampleDownload === 'function') window.holdSampleDownload('live');
             console.log('Live client: game started');
             // "Before" reading, so the next one has something to measure from.
             captureLpReadings({ quiet: true }).catch(e => console.warn('Pre-game LP read failed:', e.message));
@@ -588,6 +593,7 @@ async function pollLiveClient() {
             setLiveBadge(true);
         } else if (!inGame && wasInGame) {
             wasInGame = false;
+            if (typeof window.releaseSampleDownload === 'function') window.releaseSampleDownload('live');
             console.log('Live client: game ended');
             setLiveBadge(false);
             handleGameEnded();
@@ -664,6 +670,7 @@ window.lpWatcherStatus = function () {
 window.forceGameEnd = function () {
     console.log('Forcing the post-game sequence…');
     wasInGame = false;
+    if (typeof window.releaseSampleDownload === 'function') window.releaseSampleDownload('live');
     return handleGameEnded();
 };
 
@@ -1338,6 +1345,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // sees games while it runs); after the indexing, so the two don't index
     // the same rows at once.
     if (configValid) backfillAnalyticsInBackground().then(catchUpSync);
+
+    // Sample games: drop the ones past 90 days (switch on or off), then load
+    // the rest for the pages. Downloads start after each sync (syncPanel).
+    window.pruneSampleGames().then(() => window.loadSampleRows());
 
     // Watch LP while the app is open. This is what makes per-match LP possible
     // at all — Riot exposes no history, so the readings have to be collected

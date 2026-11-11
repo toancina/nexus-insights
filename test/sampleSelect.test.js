@@ -66,3 +66,12 @@ test('groupOf matches tier + division against your current groups', () => {
     assert.equal(S.groupOf({ tier: 'MASTER', division: null }, S.sampleGroups({ tier: 'DIAMOND', rank: 'II' })), 'above');
     assert.equal(S.groupOf({ tier: 'GOLD', division: 'II' }, silver), null);
 });
+
+test('championKeyOf maps Match-V5 names to Data Dragon keys', () => {
+    const list = { Fiddlesticks: { id: 'Fiddlesticks', key: '9' }, MonkeyKing: { id: 'MonkeyKing', key: '62' }, Yorick: { id: 'Yorick', key: '83' } };
+    assert.equal(S.championKeyOf('FiddleSticks', list), 9);
+    assert.equal(S.championKeyOf('MonkeyKing', list), 62);
+    assert.equal(S.championKeyOf('yorick', Object.values(list)), 83);
+    assert.equal(S.championKeyOf('Nobody', list), null);
+    assert.equal(S.championKeyOf('Yorick', {}), null);
+});

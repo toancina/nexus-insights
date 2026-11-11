@@ -293,6 +293,7 @@ async function detect() {
     }
 
     let togetherStarted = false;
+    if (typeof window.holdSampleDownload === 'function') window.holdSampleDownload('live-page');
     const result = await loader.load(players, {
         onUpdate: (i, entry) => {
             if (gen !== generation) return;
@@ -305,7 +306,7 @@ async function detect() {
         },
         isCancelled: () => gen !== generation,
         ownGames: isConfiguredAccount(players.find(p => p.isYou)) ? (window.matchesData || []) : null,
-    });
+    }).finally(() => { if (typeof window.releaseSampleDownload === 'function') window.releaseSampleDownload('live-page'); });
     if (gen !== generation) return;
     if (result.error) setStatus(result.error, true);
     else if (result.ok) setStatus('');

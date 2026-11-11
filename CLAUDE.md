@@ -81,6 +81,7 @@ src/
 │   ├── statHistory.js         # Click-a-card history chart
 │   ├── winRateColor.js        # Win-rate colour scale
 │   ├── updateButton.js        # ⟳ title-bar update button
+│   ├── sampleGames.js         # Settings → sample games: switch, status, download runs, holds
 │   ├── windowControls.js      # Frameless title bar: minimise / maximise / close
 │   ├── filtersPanel.js        # Queue/champion/role filter logic
 │   ├── matchCard.js           # Match row HTML helpers (icons, runes, spells, duration)
@@ -126,6 +127,7 @@ src/
 │   ├── liveClient.js          # League Live Client Data API
 │   ├── liveGame.js / liveGameLoader.js / liveGameStore.js  # Live page: rules, Riot calls, cache (#59)
 │   ├── riotErrors.js          # User-facing text for Riot API errors (sync + Live)
+│   ├── sampleSelect.js / sampleStore.js / sampleLoader.js  # Sample games: rules, tables, downloader
 │   └── paths.js / rateLimiter.js
 └── styles/
     ├── app.css                # Main stylesheet (dark theme, gold/teal accents)
@@ -1458,3 +1460,38 @@ and re-renders on every open.
   everyone Challenger), and Coaching's target is 100% in every role.
   `objectiveRate` moved from `LEGACY_STAT_COLUMNS` to `COMPUTED_STAT_COLUMNS`
   so the backfill rewrites it.
+
+### Sample games (2026-11)
+
+Settings → **Download sample games from other players** (bottom of the
+dialog, `config.sampleGames`, **off by default**, applies on click). Design:
+`docs/superpowers/specs/2026-11-11-sample-games-item-wpa-design.md`.
+
+- **What:** your top 3 champions by Solo/Duo games over the last 2 patches
+  (`sampleSelect.topChampions`); for each, the 5 players with the most mastery
+  on it (played in the last 90 days) in division I of your tier (`level`) and
+  division I of the next tier (`above`; apex: Master → GM → Challenger), 5 of
+  their Solo/Duo games on that champion each. Unranked → nothing.
+- **How** (`sampleLoader.js`, tested with a fake API/store): division list
+  pages (League-V4 `entries`, ~205 players, cached a day, ≤ 3 pages, until 5
+  candidates per champion), one `champion-masteries/by-puuid` call per player
+  (cached 7 days), then per player the 90-day id list; each unhandled id costs
+  one match call, and only games on the champion get the timeline call.
+  ≤ 15 checks per player. 404 = skip; 401/403 stops (`stopped: 'key'`).
+- **Tables** (`sampleStore.js`, never joined into `matches`): `sample_games`
+  (+ gzipped blobs), `sample_rows` (the picked player's row, tier + division
+  it was picked from), `sample_skips`, `sample_players` (`listedAt` = the list
+  fetch they were seen on), `sample_lists`. Readers join rows to games, so a
+  half-saved game is invisible. Apex division is stored as ''.
+- **When:** after every successful sync (`syncPanel` → `runSampleDownload`),
+  in the background. `holdSampleDownload(name)` pauses it: `'sync'`, `'live'`
+  (watcher sees a game), `'live-page'` (Live page loading). A request during a
+  run queues one more run. `pruneSampleGames()` at startup (on or off) drops
+  everything past 90 days.
+- **Status line** under the switch: last download and counts per champion and
+  group, or why nothing happened (no rank, no recent games, key, paused).
+- `window.sampleRows` / `window.sampleGroupsNow`: what pages read (`[]` while
+  off). A row counts only while its tier + division is one of your current
+  groups (`sampleSelect.groupOf`).
+- Live check (2026-11-11): a Silver I page is 205 entries, all with `puuid`.
+

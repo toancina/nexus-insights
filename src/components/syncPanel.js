@@ -152,6 +152,9 @@ window.handleSync = async function (options = {}) {
     // The LP watcher polls the same endpoints; this tells it to stand down so
     // the two don't compete for the rate limiter.
     window.isSyncing = true;
+    // Your sync comes first: a running sample download pauses (components/sampleGames.js)
+    if (typeof window.holdSampleDownload === 'function') window.holdSampleDownload('sync');
+    let synced = false;
 
     try {
         updateStatus('loading', 'Finding Account', `Looking up ${name}#${tag}...`);
@@ -251,6 +254,7 @@ window.handleSync = async function (options = {}) {
 
         // Let the caller see whether anything actually landed, so the
         // post-game watcher knows whether to try again.
+        synced = true;
         return { newMatches: result.newMatches || 0 };
 
     } catch (err) {
@@ -277,6 +281,9 @@ window.handleSync = async function (options = {}) {
     } finally {
         window.isSyncing = false;
         if (!syncCooldownInterval) setButtonLoading(false);
+        if (typeof window.releaseSampleDownload === 'function') window.releaseSampleDownload('sync');
+        // Sample games follow every successful sync, in the background
+        if (synced && typeof window.runSampleDownload === 'function') setTimeout(() => window.runSampleDownload(), 0);
     }
 };
 

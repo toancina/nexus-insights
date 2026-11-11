@@ -1284,3 +1284,13 @@ body.modal-open .page-scroll { overflow: hidden; }
 .chat-list-delete:hover { color: #fca5a5; background: rgba(239, 68, 68, 0.12); }
 /* "Ollama not running" under a saved chat's messages */
 .chat-problem--inline { align-self: center; }
+
+/* Settings → sample games: the switch fills the row; status lines under it */
+.setup-samples .setup-toggle { align-self: stretch; }
+.setup-samples-status {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.55);
+    white-space: pre-line;
+}
