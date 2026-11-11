@@ -49,7 +49,7 @@ function ensureSchema() {
                 matchId TEXT NOT NULL, puuid TEXT NOT NULL, gameCreation INTEGER, PRIMARY KEY (matchId, puuid))`);
             await run(`CREATE TABLE IF NOT EXISTS sample_players (
                 puuid TEXT NOT NULL, tier TEXT NOT NULL, division TEXT NOT NULL, page INTEGER,
-                masteries TEXT, checkedAt INTEGER, PRIMARY KEY (puuid, tier, division))`);
+                masteries TEXT, checkedAt INTEGER, listedAt INTEGER, PRIMARY KEY (puuid, tier, division))`);
             await run(`CREATE TABLE IF NOT EXISTS sample_lists (
                 tier TEXT NOT NULL, division TEXT NOT NULL, page INTEGER NOT NULL, fetchedAt INTEGER,
                 PRIMARY KEY (tier, division, page))`);
@@ -105,15 +105,19 @@ async function storedCount(puuid, championName) {
     return r ? r.n : 0;
 }
 
-/** Players stored for one division: [{ puuid, page, masteries, checkedAt }]. */
+/**
+ * Players stored for one division: [{ puuid, page, masteries, checkedAt, listedAt }].
+ * `listedAt` = when the list page they were last seen on was fetched, so a
+ * cached page is exactly the players with that page and that time.
+ */
 async function getPlayers(tier, division) {
     await ensureSchema();
-    const rows = await all('SELECT puuid, page, masteries, checkedAt FROM sample_players WHERE tier = ? AND division = ? ORDER BY page, puuid',
+    const rows = await all('SELECT puuid, page, masteries, checkedAt, listedAt FROM sample_players WHERE tier = ? AND division = ? ORDER BY page, puuid',
         [tier, div(division)]);
     return rows.map(r => {
         let masteries = {};
         try { masteries = JSON.parse(r.masteries || '{}') || {}; } catch { masteries = {}; }
-        return { puuid: r.puuid, page: r.page, masteries, checkedAt: r.checkedAt };
+        return { puuid: r.puuid, page: r.page, masteries, checkedAt: r.checkedAt, listedAt: r.listedAt };
     });
 }
 
@@ -121,8 +125,9 @@ async function savePlayers(rows) {
     if (!rows || !rows.length) return;
     await ensureSchema();
     for (const p of rows) {
-        await run(`INSERT OR REPLACE INTO sample_players (puuid, tier, division, page, masteries, checkedAt)
-            VALUES (?, ?, ?, ?, ?, ?)`, [p.puuid, p.tier, div(p.division), p.page ?? null, JSON.stringify(p.masteries || {}), p.checkedAt ?? null]);
+        await run(`INSERT OR REPLACE INTO sample_players (puuid, tier, division, page, masteries, checkedAt, listedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`, [p.puuid, p.tier, div(p.division), p.page ?? null, JSON.stringify(p.masteries || {}),
+            p.checkedAt ?? null, p.listedAt ?? null]);
     }
 }
 

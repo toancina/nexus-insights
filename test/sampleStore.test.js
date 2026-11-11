@@ -65,9 +65,9 @@ test('knownMatchIds includes stored and skipped ids for that player only', async
 });
 
 test('players and division lists round-trip', async () => {
-    await store.savePlayers([{ puuid: 'a', tier: 'SILVER', division: 'I', page: 1, masteries: { 83: { points: 900, lastPlayTime: NOW } }, checkedAt: NOW }]);
+    await store.savePlayers([{ puuid: 'a', tier: 'SILVER', division: 'I', page: 1, masteries: { 83: { points: 900, lastPlayTime: NOW } }, checkedAt: NOW, listedAt: NOW - 1 }]);
     const players = await store.getPlayers('SILVER', 'I');
-    assert.deepEqual(players, [{ puuid: 'a', page: 1, masteries: { 83: { points: 900, lastPlayTime: NOW } }, checkedAt: NOW }]);
+    assert.deepEqual(players, [{ puuid: 'a', page: 1, masteries: { 83: { points: 900, lastPlayTime: NOW } }, checkedAt: NOW, listedAt: NOW - 1 }]);
     assert.deepEqual(await store.getPlayers('GOLD', 'I'), []);
     assert.equal(await store.listFetchedAt('SILVER', 'I', 1), null);
     await store.saveListFetched('SILVER', 'I', 1, NOW);
