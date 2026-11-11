@@ -45,3 +45,11 @@ test('unknown server falls back instead of producing an invalid host', () => {
     assert.equal(routingFor('xx9'), 'europe');
     assert.equal(routingFor('xx9', 'americas'), 'americas');
 });
+
+test('riotApi exposes the sample-game calls', async () => {
+    const riotApi = require('../src/services/riotApi');
+    for (const fn of ['getLeagueEntries', 'getApexLeague', 'getAllMasteries']) {
+        assert.equal(typeof riotApi[fn], 'function', `${fn} missing`);
+    }
+    await assert.rejects(riotApi.getApexLeague('DIAMOND'), /apex/);
+});
