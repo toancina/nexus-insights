@@ -6,8 +6,8 @@
 > **2026-11 changes**: opt-in **sample games** (Settings, off by default):
 > other players' games on your top 3 champions at your rank and one rank up;
 > a **fitted win-chance curve**; item/rune WPA as "won vs expected" with a
-> luck margin on Champions, Live, Coaching ("Build and runes") and Chat. See
-> "Sample games" and "Fitted win chance" in Notes.
+> luck margin on Champions, Live and Chat; Coaching compares your stats with
+> those players'. See "Sample games" and "Fitted win chance" in Notes.
 >
 > **2026-10 changes** (details in the Notes section): fixed left nav rail,
 > Chat page (local Ollama), self-update from GitHub Releases (⟳ button),
@@ -135,7 +135,7 @@ src/
 │   ├── liveGame.js / liveGameLoader.js / liveGameStore.js  # Live page: rules, Riot calls, cache (#59)
 │   ├── riotErrors.js          # User-facing text for Riot API errors (sync + Live)
 │   ├── sampleSelect.js / sampleStore.js / sampleLoader.js  # Sample games: rules, tables, downloader
-│   ├── samplePool.js / buildReport.js  # Sample games: a champion's pool; Coaching's Build and runes
+│   ├── samplePool.js          # Sample games: a champion's pool (your games + theirs)
 │   └── paths.js / rateLimiter.js
 └── styles/
     ├── app.css                # Main stylesheet (dark theme, gold/teal accents)
@@ -1478,15 +1478,17 @@ dialog, `config.sampleGames`, **off by default**, applies on click). Design:
 - **What:** your top 3 champions by Solo/Duo games over the last 2 patches
   (`sampleSelect.topChampions`); for each, the 5 players with the most mastery
   on it (played in the last 90 days) in division I of your tier (`level`) and
-  division I of the next tier (`above`; apex: Master → GM → Challenger), 5 of
-  their Solo/Duo games on that champion each. Unranked → nothing.
+  division I of the next tier (`above`; apex: Master → GM → Challenger), 10 of
+  their Solo/Duo games on that champion each. Unranked → nothing. Any other
+  champion: the **Download sample games** button on its Champions page
+  (`downloadSampleChampion`), same rules, on request only.
 - **How** (`sampleLoader.js`, tested with a fake API/store): division list
   pages (League-V4 `entries`, ~205 players, cached a day, ≤ 3 pages, until 5
   candidates per champion), one `champion-masteries/by-puuid` call per player
   (cached 7 days), then per player one `getMatchIdsRange` call: Solo/Duo ids
   from 90 days ago **up to 3 h after mastery's `lastPlayTime` for that
   champion**, so their games on it come first; each unhandled id costs one
-  match call, and only games on the champion get the timeline call. ≤ 15
+  match call, and only games on the champion get the timeline call. ≤ 30
   checks per player. 404 = skip; 401/403 stops (`stopped: 'key'`).
   Live check (2026-11-12, Silver I Yorick): ids up to "now" found 2 Yorick
   games in 67 checks (the top-mastery players had last played him 26–46 days
@@ -1494,14 +1496,21 @@ dialog, `config.sampleGames`, **off by default**, applies on click). Design:
   mastery calls (~4 min on a dev key, 429s absorbed by the limiter).
 - **Tables** (`sampleStore.js`, never joined into `matches`): `sample_games`
   (+ gzipped blobs), `sample_rows` (the picked player's row, tier + division
-  it was picked from), `sample_skips`, `sample_players` (`listedAt` = the list
-  fetch they were seen on), `sample_lists`. Readers join rows to games, so a
-  half-saved game is invisible. Apex division is stored as ''.
-- **When:** after every successful sync (`syncPanel` → `runSampleDownload`),
-  in the background. `holdSampleDownload(name)` pauses it: `'sync'`, `'live'`
-  (watcher sees a game), `'live-page'` (Live page loading). A request during a
-  run queues one more run. `pruneSampleGames()` at startup (on or off) drops
-  everything past 90 days.
+  it was picked from, and `stats`: their full matches-style row as JSON from
+  `matchService.statsRowFor`, which shares `matchRowFrom` with sync, so every
+  stat is computed for them exactly like for you), `sample_skips`,
+  `sample_players` (`listedAt` = the list fetch they were seen on),
+  `sample_lists`. Readers join rows to games, so a half-saved game is
+  invisible. Apex division is stored as ''. `getSampleRows` spreads `stats`
+  under the row's own fields; `fillMissingStats` fills rows saved before
+  `stats` existed from the blobs (once, in `loadSampleRows`).
+- **When:** after every successful sync (`syncPanel` → `runSampleDownload()`),
+  in the background; a champion's button queues `runSampleDownload({
+  champions: [name] })`. One queue, one download at a time; a run paused by
+  `holdSampleDownload(name)` (`'sync'`, `'live'` = watcher sees a game,
+  `'live-page'` = Live page loading) goes back to the front.
+  `sampleChampionState(name)` gives the button its state and text.
+  `pruneSampleGames()` at startup (on or off) drops everything past 90 days.
 - **Status line** under the switch: last download and counts per champion and
   group, or why nothing happened (no rank, no recent games, key, paused).
 - `window.sampleRows` / `window.sampleGroupsNow`: what pages read (`[]` while
@@ -1567,13 +1576,15 @@ All of it only while the switch is on; off, every page is as before.
   returns `clearPick` (top beats the next beyond both margins, or is the only
   one with 5+ games; never with the window WPA); otherwise the card says "Too
   close to call". The card's cache key includes the switch/sample state.
-- **Coaching → Game Report → Build and runes** (`services/buildReport.js`,
-  pure, tested): your finished items with time vs your usual time (your other
-  games on the champion), each item's and your rune page's number over the
-  pool (this game left out), a You / Silver I / Gold I table of the most
-  common 1st/2nd/3rd item and keystone with shares, and at most one "better
-  option" (another item in the same slot beyond both margins; never without
-  the fitted curve). No sample rows → one line saying why.
+- **Coaching** compares **your stats** with the fetched players (build and
+  rune numbers stay on the Champions page): every Game Report tile and every
+  Trends card gets a line "Silver I x · Gold I y". `coachingProgress`
+  `lastGameReport` / `areaTrends` take `opts.samples = { rows, groups }` and
+  add `groups: [{ key, label, value, display, games, byRole }]` per stat /
+  area (lead stat), from `computeTabStats` over that group's rows in the role
+  played (Trends: the roles of the games the card covers), or all its rows
+  when fewer than 5 there. Rows without stats are left out. No sample rows →
+  no `groups`, page as before.
 - **Chat:** `toolSchemas({ samples })` adds `pool` (all / mine / level /
   above) to `get_item_stats` only while on (off = byte-identical schemas;
   test). Sample rows join only with a `champion` filter, a queue including

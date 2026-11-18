@@ -96,7 +96,7 @@ function world() {
         const p = `s${i}`;
         w.pages['SILVER I'][0].push({ puuid: p });
         w.masteries[p] = [mastery(83, 1000 * i)];
-        w.games[p] = Array.from({ length: 20 }, (_, j) => (j % 2 ? 'Ahri' : 'Yorick'));
+        w.games[p] = Array.from({ length: 40 }, (_, j) => (j % 2 ? 'Ahri' : 'Yorick'));
     }
     w.pages['SILVER I'][0].push({ puuid: 'me' });
     w.masteries.me = [mastery(83, 999999)];
@@ -112,10 +112,10 @@ test('fetches the timeline only for games on the champion and records a skip for
     const store = fakeStore();
     const r = await runOnce(api, store);
     assert.equal(r.stopped, null);
-    assert.equal(r.stored, 25);                       // 5 players × 5 games
-    assert.equal(calls.timeline, 25);                 // only Yorick games
-    assert.equal(calls.match, 5 * 9);                 // Y A Y A Y A Y A Y → 9 checks to reach 5
-    assert.equal(store.skips.size, 5 * 4);
+    assert.equal(r.stored, 50);                       // 5 players × 10 games
+    assert.equal(calls.timeline, 50);                 // only Yorick games
+    assert.equal(calls.match, 5 * 19);                // Y A Y A … Y → 19 checks to reach 10
+    assert.equal(store.skips.size, 5 * 9);
     assert.deepEqual(r.found, { Yorick: { level: 5 } });
     assert.ok([...store.rows.values()].every(row => row.tier === 'SILVER' && row.division === 'I'));
 });
@@ -129,19 +129,20 @@ test('never picks selfPuuid, and picks the most mastery', async () => {
     assert.deepEqual([...picked].sort(), ['s2', 's3', 's4', 's5', 's6']);
 });
 
-test('stops a player at 15 checks when they rarely play the champion', async () => {
+test('stops a player at 30 checks when they rarely play the champion', async () => {
     const w = world();
-    w.games.s6 = Array(20).fill('Ahri');
+    w.games.s6 = Array(40).fill('Ahri');
     const { api, fetched } = fakeApi(w);
     const store = fakeStore();
     await runOnce(api, store);
-    assert.equal(fetched.filter(id => id.startsWith('s6-')).length, 15);
+    assert.equal(L.MAX_CHECKS_PER_PLAYER, 30);
+    assert.equal(fetched.filter(id => id.startsWith('s6-')).length, 30);
     assert.equal(await store.storedCount('s6', 'Yorick'), 0);
 });
 
 test('never downloads a known id again, and reuses lists and masteries', async () => {
     const w = world();
-    w.games.s6 = Array(20).fill('Ahri');
+    w.games.s6 = Array(40).fill('Ahri');
     const { api, calls, fetched } = fakeApi(w);
     const store = fakeStore();
     await runOnce(api, store);
@@ -162,6 +163,7 @@ test('scans further pages only while a champion lacks 5 candidates, never more t
         w.masteries[p] = [mastery(83, 100)]; w.games[p] = Array(5).fill('Yorick'); return { puuid: p };
     });
     w.pages['SILVER I'] = [page(['a1', 'a2', 'a3']), page(['b1']), page(['c1']), page(['d1', 'd2', 'd3', 'd4', 'd5'])];
+    Object.keys(w.games).forEach(p => { w.games[p] = Array(10).fill('Yorick'); });
     const { api, calls } = fakeApi(w);
     const r = await runOnce(api, fakeStore());
     assert.equal(calls.list, 3);
@@ -192,9 +194,9 @@ test('a 404 match is skipped, not fatal', async () => {
     const store = fakeStore();
     const r = await runOnce(api, store);
     assert.equal(r.stopped, null);
-    // s6: the 404 plus 5 Ahri games on the way to its 5th Yorick game (index 10); 4 each for the others
-    assert.equal(store.skips.size, 6 + 4 * 4);
-    assert.equal(await store.storedCount('s6', 'Yorick'), 5);
+    // s6: the 404 plus 10 Ahri games on the way to its 10th Yorick game (index 20); 9 each for the others
+    assert.equal(store.skips.size, 11 + 4 * 9);
+    assert.equal(await store.storedCount('s6', 'Yorick'), 10);
 });
 
 test('shouldStop stops before the next call with stopped "paused"', async () => {
@@ -256,4 +258,18 @@ test('asks for match ids ending just after the player last played the champion',
     assert.equal(r.endTime, NOW - 30 * DAY + L.LAST_PLAY_SLACK_MS);
     assert.equal(r.startTime, NOW - 90 * DAY);
     assert.equal(r.count, 100);
+});
+
+test('10 games per player, and each stored row carries the stats statsOf builds', async () => {
+    const { GAMES_PER_PLAYER } = require(path.join(SRC, 'services', 'sampleSelect.js'));
+    assert.equal(GAMES_PER_PLAYER, 10);
+    const statsOf = (raw, tl, puuid) => ({ matchId: raw.metadata.matchId, kills: 7, puuid });
+    const g = L.sampleGameFrom(rawGame('X7', 'p', 'Yorick'), timeline(), 'p', statsOf);
+    assert.deepEqual(JSON.parse(g.row.stats), { matchId: 'X7', kills: 7, puuid: 'p' });
+    assert.equal(L.sampleGameFrom(rawGame('X6', 'p', 'Yorick'), timeline(), 'p').row.stats, null);
+    const { api } = fakeApi(world());
+    const store = fakeStore();
+    await L.createSampleLoader({ api, store, now: () => NOW, statsOf })
+        .run({ champions: [YORICK], groups: SILVER, selfPuuid: 'me', shouldStop: () => null });
+    assert.ok([...store.rows.values()].every(r => JSON.parse(r.stats).kills === 7));
 });

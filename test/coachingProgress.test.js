@@ -160,3 +160,52 @@ test('a trend switched to "all games" uses every game: newer half vs. older half
     assert.equal(dr.verdict, 'improving');
     assert.ok(dr.spark.length > 1 && dr.spark.length <= 30);
 });
+
+// ── Compared with the fetched players (sample games, 2026-11) ────────────────
+const { sampleGroups } = require(path.join(SRC, 'services', 'sampleSelect.js'));
+const GROUPS = sampleGroups({ tier: 'SILVER', rank: 'II' });
+function sampleRows(tier, n, f = () => ({})) {
+    return Array.from({ length: n }, (_, i) => makeMatch(Object.assign({
+        matchId: `S-${tier}-${i}-${Math.random()}`, queueId: 420, teamPosition: 'JUNGLE', gameDuration: 1800,
+        tier, division: 'I', dmgShare: 0.2,
+    }, f(i))));
+}
+
+test('report: each stat also shows the fetched players\' value, per group, same role when 5+ games', () => {
+    const games = series(26, i => ({ kills: 3, deaths: 5, assists: 5, win: i % 2 }));
+    const silver = sampleRows('SILVER', 6, () => ({ kills: 6, deaths: 3, assists: 6 }));
+    const goldJungle = sampleRows('GOLD', 6, () => ({ kills: 9, deaths: 3, assists: 9 }));
+    const goldTop = sampleRows('GOLD', 3, () => ({ teamPosition: 'TOP', kills: 0, deaths: 9, assists: 0 }));
+    const noStats = sampleRows('SILVER', 4, () => ({ dmgShare: undefined, kills: 50 }));   // stored before rows had stats
+    const rows = [...silver, ...goldJungle, ...goldTop, ...noStats];
+
+    const r = P.lastGameReport(games, 25, cts, { samples: { rows, groups: GROUPS } });
+    const kda = r.stats.find(s => s.id === 'avg_kda');
+    const level = kda.groups.find(g => g.key === 'level');
+    const above = kda.groups.find(g => g.key === 'above');
+    const value = list => cts('Overview', list).find(c => c.id === 'avg_kda').value;
+    assert.equal(level.label, 'Silver I');
+    assert.equal(level.value, value(silver), 'rows without stats are left out');
+    assert.equal(level.games, 6);
+    assert.equal(above.value, value(goldJungle), 'only the role played that game');
+    assert.equal(above.byRole, true);
+    assert.equal(P.lastGameReport(games, 25, cts).stats[0].groups, undefined, 'nothing new without sample games');
+
+    // Fewer than 5 in the role: the group's games in every role
+    const thin = P.lastGameReport(games, 25, cts, { samples: { rows: [...silver, ...goldTop], groups: GROUPS } });
+    const thinAbove = thin.stats.find(s => s.id === 'avg_kda').groups.find(g => g.key === 'above');
+    assert.equal(thinAbove.byRole, false);
+    assert.equal(thinAbove.value, value(goldTop));
+});
+
+test('trends: each area card shows the fetched players\' value of its lead stat', () => {
+    const games = series(20, i => ({ goldDiff15: 100 * i, win: i % 2 }));
+    const silver = sampleRows('SILVER', 6, i => ({ goldDiff15: 500 + i }));
+    const gold = sampleRows('GOLD', 6, i => ({ goldDiff15: 900 + i }));
+    const areas = P.areaTrends(games, cts, 30, { samples: { rows: [...silver, ...gold], groups: GROUPS } });
+    const lane = areas.find(a => a.tab === 'Lane Phase');
+    const lead = list => cts('Lane Phase', list).find(c => c.id === 'gd_15');
+    assert.equal(lane.groups.find(g => g.key === 'level').display, lead(silver).displayValue);
+    assert.equal(lane.groups.find(g => g.key === 'above').value, lead(gold).value);
+    assert.equal(P.areaTrends(games, cts, 30).find(a => a.tab === 'Lane Phase').groups, undefined);
+});

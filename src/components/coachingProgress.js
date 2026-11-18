@@ -28,6 +28,7 @@ const BASELINE   = 20;   // a game is compared with the 20 before it
  * timelineRules.js fix, and obj_rate sits at 93–98% for everyone anyway.)
  */
 const Roles = require('./roleBenchmarks');
+const { groupOf } = require('../services/sampleSelect');
 const { RANK_COLORS } = require('./rankTiers');
 const MIN_ROLE_BASELINE = 5;   // fewer same-role games than this → compare with all roles
 
@@ -61,6 +62,38 @@ function soloGames(all, isRemake = defaultIsRemake) {
 /** Every tab whose stats a computation will touch (for JSON prefetching). */
 function tabsNeeded() {
     return [...new Set([...Object.values(Roles.STAT_INFO).map(s => s.tab), ...AREAS.map(a => a.tab)])];
+}
+
+/**
+ * The fetched players' values (sample games, 2026-11), per group: their rows
+ * in `roles` when the group has MIN_GROUP_GAMES of them there, else all of the
+ * group's rows. Only rows that carry stats (stored after rows had them, or
+ * filled in since). Same computeTabStats as your own numbers.
+ * samples: { rows, groups } or null → [].
+ */
+const MIN_GROUP_GAMES = 5;
+function sampleComparison(samples, tabs, computeTabStats, roles) {
+    if (!samples || !Array.isArray(samples.rows) || !samples.rows.length) return [];
+    const usable = samples.rows.filter(r => r.dmgShare != null && isNum(r.kills));
+    const roleSet = new Set((roles || []).filter(r => r && r !== 'UNKNOWN'));
+    return (samples.groups || []).map(g => {
+        const inGroup = usable.filter(r => groupOf(r, samples.groups) === g.key);
+        const inRole = inGroup.filter(r => roleSet.has(Roles.normRole(r.teamPosition)));
+        const byRole = inRole.length >= MIN_GROUP_GAMES;
+        const list = byRole ? inRole : inGroup;
+        const cards = {};
+        for (const tab of tabs) Object.assign(cards, cardsById(computeTabStats, tab, list));
+        return { key: g.key, label: g.label, games: list.length, byRole, cards };
+    }).filter(c => c.games > 0);
+}
+
+function groupValues(comparison, id) {
+    return comparison.map(c => {
+        const card = c.cards[id];
+        const ok = card && isNum(card.value);
+        return { key: c.key, label: c.label, games: c.games, byRole: c.byRole,
+            value: ok ? card.value : null, display: ok ? card.displayValue : '—' };
+    });
 }
 
 function cardsById(computeTabStats, tab, games, prev = []) {
@@ -131,6 +164,8 @@ function lastGameReport(games, index, computeTabStats, opts = {}) {
         Object.assign(baseCards, cardsById(computeTabStats, tab, baselineGames));
     }
 
+    const comparison = opts.samples ? sampleComparison(opts.samples, tabs, computeTabStats, [role]) : null;
+
     const stats = ids.map(id => {
         const info = Roles.STAT_INFO[id];
         const g = gameCards[id], b = baseCards[id];
@@ -150,6 +185,7 @@ function lastGameReport(games, index, computeTabStats, opts = {}) {
             tier,
             roleBenchmark: !!(Roles.ROLE_BENCHMARKS[role] && Roles.ROLE_BENCHMARKS[role][id]),
             color: tier ? RANK_COLORS[tier] : null,
+            ...(comparison ? { groups: groupValues(comparison, id) } : {}),
         };
     }).filter(Boolean);
 
@@ -250,9 +286,17 @@ function areaTrends(games, computeTabStats, sparkPoints = 30, opts = {}) {
     if (games.length < WINDOW) return [];
     const allSet = new Set(opts.all || []);
 
-    return AREAS.map(area => allSet.has(area.tab)
-        ? areaTrendAll(area, games, computeTabStats, sparkPoints)
-        : areaTrendRecent(area, games, computeTabStats, sparkPoints));
+    return AREAS.map(area => {
+        const all = allSet.has(area.tab);
+        const t = all
+            ? areaTrendAll(area, games, computeTabStats, sparkPoints)
+            : areaTrendRecent(area, games, computeTabStats, sparkPoints);
+        if (!opts.samples) return t;
+        // The fetched players in the roles of the games this card is about
+        const compared = all ? games : games.slice(-WINDOW);
+        const roles = [...new Set(compared.map(g => Roles.normRole(g.teamPosition)))];
+        return { ...t, groups: groupValues(sampleComparison(opts.samples, [area.tab], computeTabStats, roles), area.lead) };
+    });
 }
 
 function areaTrendAll(area, games, computeTabStats, sparkPoints) {

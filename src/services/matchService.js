@@ -376,31 +376,8 @@ async function storeGames(puuid, matchIds, onProgress, skipped = 0) {
             const me = info.participants.find(p => p.puuid === puuid);
 
             if (me) {
-                // Extract team objectives
-                const myTeam = info.teams.find(t => t.teamId === me.teamId);
-                const enemyTeam = info.teams.find(t => t.teamId !== me.teamId);
-
-                const teamKills = info.participants
-                    .filter(p => p.teamId === me.teamId)
-                    .reduce((sum, p) => sum + p.kills, 0);
-
-                const myObjectives = myTeam?.objectives || {};
-                const enemyObjectives = enemyTeam?.objectives || {};
-
-                const teamDragons = myObjectives.dragon?.kills || 0;
-                const enemyDragons = enemyObjectives.dragon?.kills || 0;
-                const teamBarons = myObjectives.baron?.kills || 0;
-                const enemyBarons = enemyObjectives.baron?.kills || 0;
-                const teamRiftHeralds = myObjectives.riftHerald?.kills || 0;
-                const enemyRiftHeralds = enemyObjectives.riftHerald?.kills || 0;
-                const teamTowers = myObjectives.tower?.kills || 0;
-                const enemyTowers = enemyObjectives.tower?.kills || 0;
-                const teamInhibitors = myObjectives.inhibitor?.kills || 0;
-                const enemyInhibitors = enemyObjectives.inhibitor?.kills || 0;
-
-                // Extract rune data
-                const primaryRune = me.perks?.styles?.[0]?.selections?.[0]?.perk || null;
-                const secondaryRuneStyle = me.perks?.styles?.[1]?.style || null;
+                // The scalar columns (also used for sample games: statsRowFor)
+                const r = matchRowFrom(info, me);
 
                 // Compute advanced stats
                 const advStats = computeAdvancedStatsForMatch(data, timelineData, me.championName, me.teamId);
@@ -424,18 +401,18 @@ async function storeGames(puuid, matchIds, onProgress, skipped = 0) {
                         puuid
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
-                        id, info.queueId, info.gameCreation, info.gameDuration, me.championName, me.champLevel,
-                        me.win ? 1 : 0, me.kills, me.deaths, me.assists, me.goldEarned, (me.totalMinionsKilled || 0) + (me.neutralMinionsKilled || 0),
-                        me.totalDamageDealtToChampions, me.visionScore,
-                        me.doubleKills, me.tripleKills, me.quadraKills, me.pentaKills,
-                        me.turretKills, me.inhibitorKills, me.dragonKills, me.baronKills, me.objectivesStolen,
-                        me.wardsPlaced, me.wardsKilled, me.detectorWardsPlaced,
-                        me.teamPosition, me.lane,
-                        me.item0, me.item1, me.item2, me.item3, me.item4, me.item5, me.item6,
-                        teamDragons, enemyDragons, teamBarons, enemyBarons,
-                        teamRiftHeralds, enemyRiftHeralds, teamTowers, enemyTowers,
-                        teamInhibitors, enemyInhibitors, me.teamId, teamKills,
-                        primaryRune, secondaryRuneStyle,
+                        id, r.queueId, r.gameCreation, r.gameDuration, r.championName, r.champLevel,
+                        r.win, r.kills, r.deaths, r.assists, r.goldEarned, r.totalMinionsKilled,
+                        r.totalDamageDealtToChampions, r.visionScore,
+                        r.doubleKills, r.tripleKills, r.quadraKills, r.pentaKills,
+                        r.turretKills, r.inhibitorKills, r.dragonKills, r.baronKills, r.objectivesStolen,
+                        r.wardsPlaced, r.wardsKilled, r.detectorWardsPlaced,
+                        r.teamPosition, r.lane,
+                        r.item0, r.item1, r.item2, r.item3, r.item4, r.item5, r.item6,
+                        r.teamDragons, r.enemyDragons, r.teamBarons, r.enemyBarons,
+                        r.teamRiftHeralds, r.enemyRiftHeralds, r.teamTowers, r.enemyTowers,
+                        r.teamInhibitors, r.enemyInhibitors, r.teamId, r.teamKills,
+                        r.primaryRune, r.secondaryRuneStyle,
                         compressJson(data), timelineData ? compressJson(timelineData) : null,
                         advStats.csDiff15, advStats.goldDiff15, advStats.xpDiff15, advStats.firstBlood, advStats.dmgGoldRatio, advStats.isolatedDeaths, advStats.objectiveRate,
                         puuid   // whose game this is (#73)
@@ -508,6 +485,55 @@ async function fillGaps(puuid, onProgress, { since = seasonStart() } = {}) {
     }
     const result = await storeGames(puuid, missing, onProgress, listed.size - missing.length);
     return { listed: listed.size, missing: missing.length, newMatches: result.newMatches, newMatchIds: result.newMatchIds };
+}
+
+/**
+ * One participant's scalar `matches` columns from Match-V5 `info` (no blobs,
+ * no computed stats). Pure. Sync stores your games through it, and sample
+ * games (other players) get the same columns from it, so every stat can be
+ * computed for them with the same formulas.
+ */
+function matchRowFrom(info, me) {
+    const teams = info.teams || [];
+    const myTeam = teams.find(t => t.teamId === me.teamId);
+    const enemyTeam = teams.find(t => t.teamId !== me.teamId);
+    const mo = (myTeam && myTeam.objectives) || {};
+    const eo = (enemyTeam && enemyTeam.objectives) || {};
+    const kills = o => (o && o.kills) || 0;
+    return {
+        queueId: info.queueId, gameCreation: info.gameCreation, gameDuration: info.gameDuration,
+        championName: me.championName, champLevel: me.champLevel,
+        win: me.win ? 1 : 0, kills: me.kills, deaths: me.deaths, assists: me.assists, goldEarned: me.goldEarned,
+        totalMinionsKilled: (me.totalMinionsKilled || 0) + (me.neutralMinionsKilled || 0),
+        totalDamageDealtToChampions: me.totalDamageDealtToChampions, visionScore: me.visionScore,
+        doubleKills: me.doubleKills, tripleKills: me.tripleKills, quadraKills: me.quadraKills, pentaKills: me.pentaKills,
+        turretKills: me.turretKills, inhibitorKills: me.inhibitorKills, dragonKills: me.dragonKills,
+        baronKills: me.baronKills, objectivesStolen: me.objectivesStolen,
+        wardsPlaced: me.wardsPlaced, wardsKilled: me.wardsKilled, detectorWardsPlaced: me.detectorWardsPlaced,
+        teamPosition: me.teamPosition, lane: me.lane,
+        item0: me.item0, item1: me.item1, item2: me.item2, item3: me.item3, item4: me.item4, item5: me.item5, item6: me.item6,
+        teamDragons: kills(mo.dragon), enemyDragons: kills(eo.dragon),
+        teamBarons: kills(mo.baron), enemyBarons: kills(eo.baron),
+        teamRiftHeralds: kills(mo.riftHerald), enemyRiftHeralds: kills(eo.riftHerald),
+        teamTowers: kills(mo.tower), enemyTowers: kills(eo.tower),
+        teamInhibitors: kills(mo.inhibitor), enemyInhibitors: kills(eo.inhibitor),
+        teamId: me.teamId,
+        teamKills: (info.participants || []).filter(p => p.teamId === me.teamId).reduce((sum, p) => sum + p.kills, 0),
+        primaryRune: me.perks?.styles?.[0]?.selections?.[0]?.perk || null,
+        secondaryRuneStyle: me.perks?.styles?.[1]?.style || null,
+    };
+}
+
+/**
+ * A sample game's row for one player: matchRowFrom plus every computed stat,
+ * the same values your own games store. null when the player isn't in it.
+ */
+function statsRowFor(raw, timeline, puuid) {
+    const info = raw && raw.info;
+    const me = info && (info.participants || []).find(p => p.puuid === puuid);
+    if (!me) return null;
+    const { statsComputedAt, ...computed } = computeAdvancedStatsForMatch(raw, timeline, me.championName, me.teamId);
+    return { matchId: (raw.metadata && raw.metadata.matchId) || null, ...matchRowFrom(info, me), ...computed };
 }
 
 // Compute advanced stats given the participant index and parsed data
@@ -1036,7 +1062,7 @@ module.exports = { syncMatches, fillGaps, loadTeammates, getMatches, getStats, g
     recordLpReading, getLpReadings, attachLpReadingsToMatches, getLpDeltasByMatch, absoluteLp,
     addLpCheckpoint, deleteLpCheckpoint, getLpCheckpoints,
     loadRawJson, loadTimelineJson, getCachedRawJson, getCachedTimelineJson, clearJsonCache,
-    getCoachingData, saveComputedStats, backfillComputedStats,
+    getCoachingData, saveComputedStats, backfillComputedStats, matchRowFrom, statsRowFor,
     computeAdvancedStatsForMatch, COMPUTED_STAT_COLUMNS };
 
 
