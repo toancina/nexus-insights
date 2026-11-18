@@ -12,10 +12,14 @@
  * what you bought next in your stored games on this champion when you had
  * the same finished items, ranked by average WPA (services/nextItem.js).
  * Your items are re-read every ITEM_POLL_MS while the game runs.
+ *
+ * Above it, a Matchup section: your games on this champion against the enemy
+ * in your position (championStats.matchupFor), plus other players' sample
+ * games while the Champions page's Matchups switch is on.
  */
 
 const { getPlayerList, getActivePlayerName } = require('../services/liveClient');
-const { getChampionList, getItemData } = require('../services/dataDragon');
+const { getChampionList, getItemData, getRuneData } = require('../services/dataDragon');
 const riotApi = require('../services/riotApi');
 const liveGameStore = require('../services/liveGameStore');
 const { createLiveGameLoader } = require('../services/liveGameLoader');
@@ -23,6 +27,9 @@ const { parsePlayers, playerTags, rankSummary, gamesTogether } = require('../ser
 const { loadTeammates } = require('../services/matchService');
 const { loadConfig } = require('../services/config');
 const { nextItemOptions, championGames, MIN_GAMES } = require('../services/nextItem');
+const { matchupFor } = require('../services/championStats');
+const { championPool } = require('../services/samplePool');
+const { isCoreItem, matchupSamplesOn } = require('./championsPanel');
 const winCurve = require('../services/winCurve');
 const { formatWpa } = require('../services/itemWpa');
 const { getChampionIcon, timeAgo, RUNE_ICONS } = require('./matchCard');
@@ -43,12 +50,20 @@ const GOOD_TAGS = /^(Main|Win streak|Hot streak|Veteran)/;
 const BAD_TAGS = /^(First time|Loss streak|Inactive)/;
 
 let generation = 0;   // bumped by every click; an older load sees it and stops
-let state = null;     // { players, entries, together, allyTeam, activeName, ownGames, next }
+let state = null;     // { players, entries, together, allyTeam, activeName, ownGames, next, matchup }
 let itemTimer = null;
 
 const pct = (x) => `${Math.round(x * 100)}%`;
 const titleCase = (s) => String(s || '').charAt(0) + String(s || '').slice(1).toLowerCase();
 const itemName = (id) => (getItemData(id) || {}).name || `Item ${id}`;
+const runeName = (id) => (getRuneData(id) || {}).name || `Rune ${id}`;
+/** Keystone icon: Data Dragon's own path, else the shared table (like the Champions page). */
+function runeImg(id) {
+    const data = getRuneData(id);
+    const src = data && data.icon ? `https://ddragon.leagueoflegends.com/cdn/img/${data.icon}`
+        : RUNE_ICONS[id] ? `https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/${RUNE_ICONS[id]}` : '';
+    return src ? `<img class="live-item" src="${escapeAttr(src)}" alt="">` : '';
+}
 
 function setStatus(text, isError = false) {
     const el = document.getElementById('liveStatus');
@@ -144,6 +159,63 @@ function nextItemCard(p) {
             : '<div class="live-next-note">WPA: the average change in your team\'s estimated win chance from that purchase until your next trip to the shop. It shows how your games went, not what the item caused. Boots are left out.</div>'}`;
 }
 
+/** The enemy (not a bot) in your position, or null (no positions, e.g. ARAM). */
+function laneOpponentOf(p, players) {
+    if (!p.position) return null;
+    return (players || []).find(q => q.team !== p.team && !q.isBot && q.position === p.position && q.championId) || null;
+}
+
+/**
+ * Matchup section: your games on this champion vs `opponent` in your
+ * position, plus other players' games while sample games are on AND the
+ * Champions page's Matchups switch is on. Same numbers as that card.
+ */
+function matchupCard(p, opponent, ownGames) {
+    const withSamples = matchupSamplesOn() && typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled();
+    const pool = championPool(ownGames || [], withSamples ? (window.sampleRows || []) : [], p.championId,
+        { role: p.position || null, groups: window.sampleGroupsNow || [] });
+    const m = matchupFor(pool.games, opponent.championId, { isCoreItem });
+    const icon = getChampionIcon(opponent.championId);
+    const title = `<div class="live-next-title">Matchup vs ${icon ? `<img class="live-matchup-icon" src="${escapeAttr(icon)}" alt="">` : ''}${escapeHtml(opponent.championName)}</div>`;
+    if (!m) {
+        return `${title}<div class="live-line live-muted">No ${escapeHtml(p.championName)} games vs ${escapeHtml(opponent.championName)} stored yet${withSamples ? ', yours or other players\'' : ''}.</div>`;
+    }
+    const signed = (v, digits) => (v == null ? '–' : (v > 0 ? '+' : '') + (digits ? v.toFixed(digits) : Math.round(v).toLocaleString('en-US')));
+    const split = m.sampleGames
+        ? ` title="${escapeAttr(`Yours ${m.wins - m.sampleWins}–${m.losses - (m.sampleGames - m.sampleWins)} · others ${m.sampleWins}–${m.sampleGames - m.sampleWins}`)}"` : '';
+    const source = m.sampleGames
+        ? `Your games + ${m.sampleGames} of other players' (the Champions page's Matchups switch)`
+        : 'Your games';
+    const chip = (img, name, r) => `<span class="ch-build" title="${escapeAttr(name)}: ${r.wins}W ${r.games - r.wins}L">${img}<span>${r.games}</span>` +
+        `<span style="color:${wrTextColor(r.winRate)}">${pct(r.winRate)}</span></span>`;
+    const items = m.items.slice(0, 5).map(i => chip(itemImg(i.itemId, { extra: 'class="live-item"' }), itemName(i.itemId), i)).join('');
+    const runes = m.runes.slice(0, 3).map(r => chip(runeImg(r.keystone), runeName(r.keystone), r)).join('');
+    return `${title}
+        <div class="live-matchup-stats${m.games < MIN_GAMES ? ' is-low' : ''}">
+            <span><b>${m.games}</b> game${m.games === 1 ? '' : 's'}</span>
+            <span${split}>${m.wins}–${m.losses}</span>
+            <span style="color:${wrTextColor(m.winRate)}">${pct(m.winRate)}</span>
+            <span>KDA ${m.kda == null ? '–' : m.kda.toFixed(2)}</span>
+            <span>GD@15 <span style="color:${m.gd15 > 0 ? 'var(--success)' : m.gd15 < 0 ? 'var(--error)' : ''}">${signed(m.gd15)}</span></span>
+            <span>CSD@15 ${signed(m.csd15, 1)}</span>
+        </div>
+        <div class="live-next-sub">${escapeHtml(source)}${m.games < MIN_GAMES ? ` · only ${m.games} game${m.games === 1 ? '' : 's'}, a rough guide` : ''}</div>
+        ${items ? `<div class="ch-builds-row"><span class="ch-builds-label">Items built</span><div class="ch-builds-items live-matchup-builds">${items}</div></div>` : ''}
+        ${runes ? `<div class="ch-builds-row"><span class="ch-builds-label">Keystones</span><div class="ch-builds-items live-matchup-builds">${runes}</div></div>` : ''}`;
+}
+
+/** Matchup section for your row, recomputed only when its inputs change. */
+function matchupHtml(p) {
+    if (!state.ownGames) return '';   // Next item explains why
+    const opponent = laneOpponentOf(p, state.players);
+    if (!opponent) return '';
+    const samples = matchupSamplesOn() && typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled()
+        ? `${(window.sampleRows || []).length}` : 'off';
+    const key = `${p.championId}|${p.position}|${opponent.championId}|${samples}|${state.ownGames.length}`;
+    if (!state.matchup || state.matchup.key !== key) state.matchup = { key, html: matchupCard(p, opponent, state.ownGames) };
+    return `<div class="live-next live-matchup">${state.matchup.html}</div>`;
+}
+
 /** The card for your row, recomputed only when the champion, role or items change. */
 function nextItemHtml(p) {
     const samples = typeof window.sampleGamesEnabled === 'function' && window.sampleGamesEnabled()
@@ -202,7 +274,7 @@ function rowHtml(p) {
             ${tags ? `<div class="live-tags">${tags}</div>` : ''}
         </div>
         ${stats}
-        ${p.isYou ? nextItemHtml(p) : ''}
+        ${p.isYou ? matchupHtml(p) + nextItemHtml(p) : ''}
     </div>`;
 }
 
@@ -335,3 +407,5 @@ window.openLiveGamePanel = function () {
     }
     if (!document.querySelector('#liveGame .live-teams')) render();
 };
+
+module.exports = { _internal: { matchupCard, laneOpponentOf } };

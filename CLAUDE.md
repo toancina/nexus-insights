@@ -729,6 +729,15 @@ items, ranked by average item WPA (#89).
 - Your items are re-read every 10 s (`ITEM_POLL_MS`, its own timer, so it
   works with auto-logging off) until the game ends or Detect is clicked
   again. Real data: ~5 ms per lookup on 200 games.
+- **Matchup section** (2026-11-18), above Next item on your row: your games
+  on this champion in your position vs the enemy (not a bot) with your Live
+  Client `position` (`laneOpponentOf`; no positions, e.g. ARAM → no section).
+  `championPool` + `championStats.matchupFor` (case-insensitive
+  `laneOpponent`), so it's the Champions Matchups row: stats, items built,
+  keystones. Other players' games join while sample games are on **and** the
+  Champions page's Matchups switch is on (`matchupSamplesOn()` exported from
+  championsPanel.js); W–L tooltip splits yours from theirs. Only for the
+  configured account; cached like Next item.
 
 ### Teammates page (2026-10, issue #11)
 

@@ -6564,6 +6564,10 @@ tr.is-low .ch-wr.is-low {
     color: var(--text-primary);
 }
 .live-next-row.is-low { opacity: 0.55; }
+.live-matchup-icon { width: 16px; height: 16px; border-radius: 3px; vertical-align: -3px; margin: 0 4px; }
+.live-matchup-stats { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); font-size: var(--t-small); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.live-matchup-stats.is-low { opacity: 0.55; }
+.live-matchup-builds { gap: var(--s2); }
 .live-next-head {
     font-size: var(--t-label);
     color: var(--text-tertiary);
