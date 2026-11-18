@@ -119,3 +119,13 @@ test('fillMissingStats computes stats for rows saved without them, from the stor
     assert.equal((await store.getSampleRows()).find(x => x.matchId === 'FS1').kills, 3);
     assert.equal(await store.fillMissingStats(() => ({ kills: 4 })), 0, 'nothing left to fill');
 });
+
+test('fillMissingStats recomputes every row once when the stats version goes up (impact rescored, 2026-11-18)', async () => {
+    await store.saveGame({ game: gameOf('SV1'), row: { ...rowOf('SV1', 'sv'), stats: { impactRank: 9 } } });
+    // Pretend everything was stored under the old stats version
+    await store._internal.setStatsVersion(1);
+    const n = await store.fillMissingStats(() => ({ impactRank: 2 }));
+    assert.ok(n >= 1);
+    assert.equal((await store.getSampleRows()).find(x => x.matchId === 'SV1').impactRank, 2);
+    assert.equal(await store.fillMissingStats(() => ({ impactRank: 5 })), 0, 'only once');
+});
