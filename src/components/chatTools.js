@@ -529,6 +529,100 @@ function winChancePatterns(args, ctx) {
     };
 }
 
+/**
+ * compare_with_players (sample games on, 2026-11-18): the user's stats on one
+ * champion next to the sample games of each group (your rank, one rank up).
+ * Every value is computeTabStats over that group's games, the same numbers
+ * Coaching shows; Consistency is left out (streaks and spread over several
+ * players' games mean nothing), and so are count-only cards.
+ */
+const COMPARE_TABS = TABS.filter(t => t !== 'Consistency');
+const COMPARE_AREAS = ['all', ...COMPARE_TABS, 'Win chance'];
+const NOT_COMPARED = new Set(['con_last10_wr']);
+
+function winChanceSummary(rows) {
+    const games = rows.map(m => ({ m, win: isWin(m), points: winCurve.pointsFor(m) }));
+    const s = winChanceStats(games);
+    if (!s.games) return { games_with_win_chance: 0 };
+    const curves = games.filter(g => g.points.length >= 2);
+    const wins = curves.filter(g => g.win).length;
+    const wr = r => (r.games ? `${pct(r.wins, r.games)}% of ${r.games}` : '–');
+    return {
+        games_with_win_chance: s.games,
+        avg_win_chance_10_15_20: [10, 15, 20].map(t => (Number.isFinite(s.average[t]) ? `${Math.round(s.average[t])}%` : '–')).join(' / '),
+        win_rate_ahead_at_15: wr(s.at15.ahead),
+        win_rate_even_at_15: wr(s.at15.even),
+        win_rate_behind_at_15: wr(s.at15.behind),
+        throws_pct_of_losses: pct(s.throws.length, curves.length - wins),
+        comebacks_pct_of_wins: pct(s.comebacks.length, wins),
+    };
+}
+
+async function compareWithPlayers(args, ctx) {
+    if (!ctx.sampleRows) return { error: 'Sample games are off. Turn them on in Settings → sample games.' };
+    if (!args.champion) return { error: "Name a champion: other players' games are per champion." };
+    const area = COMPARE_AREAS.find(a => norm(a) === norm(args.area || 'all'));
+    if (!area) return { error: `Unknown area "${args.area}". Use one of: ${COMPARE_AREAS.join(', ')}.` };
+
+    // Sample games are Solo/Duo, so your side is too
+    const filters = { champion: args.champion, role: args.role, last_n_days: args.last_n_days,
+                      last_n_patches: args.last_n_patches, queue: 'solo' };
+    const own = filtered(ctx, filters);
+    if (own.error) return { error: own.error };
+    const samples = sampleGamesFor(filters, ctx) || [];
+    if (!samples.length) {
+        return { filters: own.description, games: own.matches.length,
+                 error: `No other players' games on ${args.champion} with these filters. Download them with the champion's button on the Champions page.` };
+    }
+    const groups = [{ label: 'you', rows: own.matches },
+        ...(ctx.sampleGroups || []).map(g => ({ label: g.label, rows: samples.filter(r => r.sample === g.key) }))];
+
+    const out = {
+        filters: own.description,
+        pools: groups.map(g => ({
+            group: g.label, games: g.rows.length,
+            players: g.label === 'you' ? 1 : new Set(g.rows.map(r => r.puuid)).size,
+            dates: dateRange(g.rows) || undefined,
+        })),
+    };
+
+    const tabs = area === 'all' ? COMPARE_TABS : area === 'Win chance' ? [] : [area];
+    if (tabs.length) {
+        out.stats = {};
+        const seen = new Set();
+        for (const tab of tabs) {
+            await prefetch(ctx, tab, own.matches);   // sample rows carry their stats; only yours may need blobs
+            const byGroup = groups.map(g => new Map((g.rows.length ? ctx.computeTabStats(tab, g.rows, []) || [] : []).map(c => [c.id, c])));
+            const ids = [];
+            for (const m of byGroup) for (const id of m.keys()) if (!ids.includes(id)) ids.push(id);
+            const rows = [];
+            for (const id of ids) {
+                const any = byGroup.map(m => m.get(id)).find(Boolean);
+                const label = any.label.replace(/\s*\(\d+g\)\s*$/, '');
+                if (any.aggregationType === 'count' || any.aggregationType === 'none' || NOT_COMPARED.has(id) || seen.has(norm(label))) continue;
+                seen.add(norm(label));
+                const row = { stat: label };
+                groups.forEach((g, i) => {
+                    const c = byGroup[i].get(id);
+                    const tier = c && c.benchmarkable && c.benchmarkRank && c.benchmarkRank !== 'unrated' ? ` (${c.benchmarkRank})` : '';
+                    row[g.label] = c ? `${c.displayValue}${tier}` : '–';
+                });
+                if (any.higherIsBetter === false) row.lower_is_better = true;
+                rows.push(row);
+            }
+            if (rows.length) out.stats[tab] = rows;
+        }
+    }
+    if (area === 'all' || area === 'Win chance') {
+        out.win_chance = Object.fromEntries(groups.map(g => [g.label, winChanceSummary(g.rows)]));
+    }
+    const small = out.pools.filter(p => p.group !== 'you' && p.games < 10).map(p => p.group);
+    out.note = "Other players' numbers come from the few players in each pool: they describe those players, not the whole rank."
+        + (small.length ? ` Under 10 games in ${small.join(', ')}: not reliable.` : '')
+        + ' Tiers (iron … challenger) compare a value with typical players of that rank.';
+    return out;
+}
+
 // ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
@@ -792,6 +886,26 @@ const TOOLS = [
 ];
 
 /** Ollama/OpenAI-style tool schemas for the chat request. */
+/** Only while sample games are on: your stats next to other players' on a champion. */
+const COMPARE_TOOL = {
+    name: 'compare_with_players',
+    description: "The user's stats on one champion next to other players' sample games (their rank and one rank up), " +
+        'each value with its rank tier: every Analytics category plus win-chance patterns, with game and player counts. ' +
+        'One call answers "compare me with Gold players".',
+    parameters: {
+        type: 'object',
+        properties: {
+            champion: FILTER_PROPS.champion,
+            area: { type: 'string', enum: COMPARE_AREAS, description: 'Default all.' },
+            role: FILTER_PROPS.role,
+            last_n_days: FILTER_PROPS.last_n_days,
+            last_n_patches: FILTER_PROPS.last_n_patches,
+        },
+        required: ['champion'],
+    },
+    run: compareWithPlayers,
+};
+
 /** Only while sample games are on: whose games get_item_stats counts. */
 const POOL_PROP = {
     type: 'string', enum: ['all', 'mine', 'level', 'above'],
@@ -804,7 +918,8 @@ function toolSchemas({ samples = false } = {}) {
             ? { ...t.parameters, properties: { ...t.parameters.properties, pool: POOL_PROP } }
             : t.parameters;
         return { type: 'function', function: { name: t.name, description: t.description, parameters } };
-    });
+    }).concat(samples ? [{ type: 'function', function: {
+        name: COMPARE_TOOL.name, description: COMPARE_TOOL.description, parameters: COMPARE_TOOL.parameters } }] : []);
 }
 
 /** Short human description of a tool call, for the "looked up…" line in the chat. */
@@ -821,6 +936,7 @@ function describeCall(name, args = {}) {
         get_filter_options: 'what the data covers',
         get_rank_and_lp: `${args.queue === 'flex' ? 'Flex' : 'Solo/Duo'} rank and LP`,
         get_coaching_focus: 'coaching analysis',
+        compare_with_players: `comparison with other players${args.area && norm(args.area) !== 'all' ? `: ${args.area}` : ''}`,
     }[name] || name;
     const bits = [];
     if (args.queue && args.queue !== 'all' && name !== 'get_rank_and_lp') bits.push(args.queue);
@@ -842,7 +958,7 @@ function describeCall(name, args = {}) {
  * model can explain them instead of the chat breaking.
  */
 async function executeTool(name, args, ctx) {
-    const tool = TOOLS.find(t => t.name === name);
+    const tool = TOOLS.find(t => t.name === name) || (name === COMPARE_TOOL.name ? COMPARE_TOOL : null);
     if (!tool) return { error: `Unknown tool "${name}".` };
     let parsed = args;
     if (typeof parsed === 'string') {

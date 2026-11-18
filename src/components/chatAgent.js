@@ -38,6 +38,7 @@ function buildSystemPrompt({ player, today, totalGames, from, to, samples = fals
         '- Give practical League advice when asked, but base claims about this player on the data.',
         ...(samples ? [
             '- With a champion, get_item_stats also counts sample games from other players at the user\'s rank and one rank up (pool picks whose). Its WPA is then how much more often games with the item were won than the game state predicted. Numbers whose ± margin includes 0 are not evidence for or against an option; say so instead of recommending.',
+            '- To compare how the user plays a champion with other players (KDA, CS, kill participation, vision, lane, deaths, objectives, win chance), call compare_with_players once (area all by default); it lists each pool\'s games and players. Those players\' numbers describe a handful of players, not the whole rank: say so, and treat pools under 10 games as unreliable.',
         ] : []),
     ].join('\n');
 }

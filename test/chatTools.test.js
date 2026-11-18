@@ -296,14 +296,18 @@ const sampleCtx = {
     sampleRows: [...[0, 1, 2].map(i => sampleRow('SILVER', i)), ...[3, 4].map(i => sampleRow('GOLD', i)), sampleRow('GOLD', 9, { championName: 'Zed' })],
 };
 
-test('toolSchemas: identical with samples off; on adds only get_item_stats.pool', () => {
+test('toolSchemas: identical with samples off; on adds get_item_stats.pool and compare_with_players', () => {
     const off = T.toolSchemas();
     assert.deepEqual(T.toolSchemas({ samples: false }), off);
     assert.ok(!JSON.stringify(off).includes('"pool"'));
+    assert.ok(!off.some(s => s.function.name === 'compare_with_players'));
     const on = T.toolSchemas({ samples: true });
     const items = on.find(s => s.function.name === 'get_item_stats').function.parameters.properties;
     assert.deepEqual(items.pool.enum, ['all', 'mine', 'level', 'above']);
-    const stripped = JSON.parse(JSON.stringify(on));
+    const compare = on.find(s => s.function.name === 'compare_with_players').function.parameters;
+    assert.deepEqual(compare.required, ['champion']);
+    assert.ok(!compare.properties.area.enum.includes('Consistency'), 'streaks mean nothing over several players');
+    const stripped = JSON.parse(JSON.stringify(on)).filter(s => s.function.name !== 'compare_with_players');
     delete stripped.find(s => s.function.name === 'get_item_stats').function.parameters.properties.pool;
     assert.deepEqual(stripped, off);
     assert.ok(JSON.stringify(on).length < 14000);
@@ -331,4 +335,37 @@ test('pool "above" uses only that group, "mine" only your games', async () => {
     assert.deepEqual(above.pool, { yours: 0, 'Silver I': 0, 'Gold I': 2 });
     const mine = await T.executeTool('get_item_stats', { champion: 'Ahri', pool: 'mine' }, sampleCtx);
     assert.equal(mine.games, 7);
+});
+
+test('compare_with_players: your stats next to each group, every area, with counts', async () => {
+    const out = await T.executeTool('compare_with_players', { champion: 'Ahri' }, sampleCtx);
+    assert.deepEqual(out.pools.map(p => [p.group, p.games, p.players]), [['you', 7, 1], ['Silver I', 3, 3], ['Gold I', 2, 2]]);
+    assert.equal(out.filters.includes('Solo/Duo'), true, 'sample games are Solo/Duo, so yours are too');
+    for (const area of ['Overview', 'Lane Phase', 'Combat', 'Death Review', 'Objectives', 'Vision', 'Economy', 'Macro']) {
+        assert.ok(Array.isArray(out.stats[area]) && out.stats[area].length, `${area} present`);
+    }
+    assert.equal(out.stats.Consistency, undefined);
+    const wr = out.stats.Overview.find(r => r.stat === 'Win Rate');
+    assert.ok(wr.you && wr['Silver I'] && wr['Gold I']);
+    // A stat shown on two tabs is listed once
+    const labels = Object.values(out.stats).flat().map(r => r.stat);
+    assert.equal(labels.length, new Set(labels).size);
+    assert.ok(out.win_chance && out.win_chance.you && out.win_chance['Silver I']);
+});
+
+test('compare_with_players: one area, and the errors', async () => {
+    const lane = await T.executeTool('compare_with_players', { champion: 'Ahri', area: 'lane phase' }, sampleCtx);
+    assert.deepEqual(Object.keys(lane.stats), ['Lane Phase']);
+    assert.equal(lane.win_chance, undefined);
+    const wc = await T.executeTool('compare_with_players', { champion: 'Ahri', area: 'Win chance' }, sampleCtx);
+    assert.equal(wc.stats, undefined);
+    assert.ok(wc.win_chance.you);
+    assert.ok((await T.executeTool('compare_with_players', {}, sampleCtx)).error);
+    assert.ok((await T.executeTool('compare_with_players', { champion: 'Ahri', area: 'Consistency' }, sampleCtx)).error);
+    assert.ok((await T.executeTool('compare_with_players', { champion: 'Ahri' }, itemsCtx)).error, 'sample games off');
+    // Your games on a champion nobody else's games were downloaded for
+    const withKaisa = { ...sampleCtx, matches: [...sampleCtx.matches, makeMatch({ championName: 'Kaisa', queueId: 420 })] };
+    const none = await T.executeTool('compare_with_players', { champion: 'Kaisa' }, withKaisa);
+    assert.ok(none.error && /Champions page/.test(none.error));
+    assert.equal(none.games, 1);
 });
