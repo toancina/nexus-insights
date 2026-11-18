@@ -136,6 +136,18 @@ test('detail: matchups count other players\' games (sample rows)', () => {
     assert.deepEqual([zed.sampleGames, zed.sampleWins], [0, 0]);
 });
 
+test('matchupFor: case-insensitive opponent, sample counts, null when none', () => {
+    const games = [
+        game('Yorick', { laneOpponent: 'FiddleSticks', win: 1, goldDiff15: 200 }),
+        game('Yorick', { laneOpponent: 'FiddleSticks', win: 0, goldDiff15: -400, sample: 'above' }),
+        game('Yorick', { laneOpponent: 'Darius', win: 1 }),
+    ];
+    const m = C.matchupFor(games, 'Fiddlesticks');
+    assert.deepEqual([m.games, m.wins, m.sampleGames, m.sampleWins, m.gd15], [2, 1, 1, 0, -100]);
+    assert.equal(C.matchupFor(games, 'Zed'), null);
+    assert.equal(C.matchupFor(games, ''), null);
+});
+
 test('roleLabel', () => {
     assert.equal(C.roleLabel('UTILITY'), 'Support');
     assert.equal(C.roleLabel('BOTTOM'), 'ADC');

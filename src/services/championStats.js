@@ -152,6 +152,33 @@ function runeEdge(row, championWinRate) {
     return { edge: (wr - championWinRate) * 100, edgeMargin: 1.96 * Math.sqrt(p * (1 - p) / row.games) * 100 };
 }
 
+/** One matchup row: the games vs one lane opponent, with what was built in them. */
+function matchupRow(opponent, list, isCoreItem) {
+    return {
+        opponent,
+        ...summarize(list),
+        // Other players' games in this matchup (samplePool marks them `sample`)
+        sampleGames: list.filter(m => m.sample).length,
+        sampleWins: list.filter(m => m.sample && m.win === 1).length,
+        items: itemRows(list, isCoreItem),
+        runes: rateRows(list, m => (m.primaryRune ? [m.primaryRune] : []), list.length)
+            .map(({ key, ...r }) => ({ keystone: key, ...r })),
+    };
+}
+
+/**
+ * The matchup vs one opponent (Live page): games already narrowed to your
+ * champion and role. The name is compared case-insensitively, since the Live
+ * Client / Data Dragon say "Fiddlesticks" and Match-V5 "FiddleSticks".
+ * Null when no game has that lane opponent.
+ */
+function matchupFor(games, opponent, { isCoreItem = id => id > 0 } = {}) {
+    const name = String(opponent || '').toLowerCase();
+    if (!name) return null;
+    const list = (games || []).filter(m => String(m.laneOpponent || '').toLowerCase() === name);
+    return list.length ? matchupRow(opponent, list, isCoreItem) : null;
+}
+
 function championDetail(matches, champion, { role = null, isCoreItem = id => id > 0 } = {}) {
     const all = matches.filter(m => m.championName === champion);
     const games = role ? all.filter(m => (m.teamPosition || '') === role) : all;
@@ -165,16 +192,7 @@ function championDetail(matches, champion, { role = null, isCoreItem = id => id 
 
     const known = games.filter(m => m.laneOpponent);
     const matchups = [...groupBy(known, m => m.laneOpponent)]
-        .map(([opponent, list]) => ({
-            opponent,
-            ...summarize(list),
-            // Other players' games in this matchup (samplePool marks them `sample`)
-            sampleGames: list.filter(m => m.sample).length,
-            sampleWins: list.filter(m => m.sample && m.win === 1).length,
-            items: itemRows(list, isCoreItem),
-            runes: rateRows(list, m => (m.primaryRune ? [m.primaryRune] : []), list.length)
-                .map(({ key, ...r }) => ({ keystone: key, ...r })),
-        }))
+        .map(([opponent, list]) => matchupRow(opponent, list, isCoreItem))
         .sort(byGamesDesc);
 
     return {
@@ -188,4 +206,4 @@ function championDetail(matches, champion, { role = null, isCoreItem = id => id 
     };
 }
 
-module.exports = { summarize, championTable, championDetail, roleTable, sortRows, roleLabel, ROLE_LABELS };
+module.exports = { summarize, championTable, championDetail, matchupFor, roleTable, sortRows, roleLabel, ROLE_LABELS };

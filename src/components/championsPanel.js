@@ -416,4 +416,7 @@ function openChampionsPanel() {
 
 window.openChampionsPanel = openChampionsPanel;
 
-module.exports = { openChampionsPanel, isCoreItem };
+/** Is the Matchups card's "Include other players' games" switch on? The Live page follows it. */
+const matchupSamplesOn = () => matchupSamples;
+
+module.exports = { openChampionsPanel, isCoreItem, matchupSamplesOn };
