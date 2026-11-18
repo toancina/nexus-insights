@@ -168,6 +168,9 @@ function championDetail(matches, champion, { role = null, isCoreItem = id => id 
         .map(([opponent, list]) => ({
             opponent,
             ...summarize(list),
+            // Other players' games in this matchup (samplePool marks them `sample`)
+            sampleGames: list.filter(m => m.sample).length,
+            sampleWins: list.filter(m => m.sample && m.win === 1).length,
             items: itemRows(list, isCoreItem),
             runes: rateRows(list, m => (m.primaryRune ? [m.primaryRune] : []), list.length)
                 .map(({ key, ...r }) => ({ keystone: key, ...r })),

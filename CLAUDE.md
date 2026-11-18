@@ -1579,6 +1579,12 @@ All of it only while the switch is on; off, every page is as before.
   Silver I … · Gold I … · runes and build order only". Numbers inside their
   margin are greyed (`is-muted`), with "± n" in the tooltip; the note under
   Build order explains won vs expected when the curve is fitted.
+- **Matchups card switch** (2026-11-18): "Include other players' games",
+  shown only while sample games are on and this champion has some in the
+  pool. Off by default (`localStorage` `nexus.matchupsSamples`). On, every
+  row and its expanded items/keystones are `championDetail` over the same
+  pool; matchup rows carry `sampleGames` / `sampleWins`, so the W–L tooltip
+  says "Yours 11–7 · others 1–2" and the subtitle counts their games.
 - **Live → Next item:** `championGames(..., { extra: sampleRows })` (sample
   games join after the role rule, which is about you). `nextItemOptions`
   returns `clearPick` (top beats the next beyond both margins, or is the only

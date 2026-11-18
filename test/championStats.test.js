@@ -122,6 +122,20 @@ test('detail: matchups vs lane opponent, with lane diffs and what you built', ()
     assert.equal(d.unmatched, 2, 'games without a known lane opponent are counted, not hidden');
 });
 
+test('detail: matchups count other players\' games (sample rows)', () => {
+    const games = [
+        game('Ahri', { laneOpponent: 'Syndra', win: 1, sample: 'level' }),
+        game('Ahri', { laneOpponent: 'Syndra', win: 0, sample: 'above' }),
+        game('Ahri', { laneOpponent: 'Syndra', win: 1 }),
+        game('Ahri', { laneOpponent: 'Zed', win: 1 }),
+    ];
+    const d = C.championDetail(games, 'Ahri');
+    const syndra = d.matchups.find(m => m.opponent === 'Syndra');
+    const zed = d.matchups.find(m => m.opponent === 'Zed');
+    assert.deepEqual([syndra.games, syndra.wins, syndra.sampleGames, syndra.sampleWins], [3, 2, 2, 1]);
+    assert.deepEqual([zed.sampleGames, zed.sampleWins], [0, 0]);
+});
+
 test('roleLabel', () => {
     assert.equal(C.roleLabel('UTILITY'), 'Support');
     assert.equal(C.roleLabel('BOTTOM'), 'ADC');
