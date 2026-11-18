@@ -532,8 +532,11 @@ function statsRowFor(raw, timeline, puuid) {
     const info = raw && raw.info;
     const me = info && (info.participants || []).find(p => p.puuid === puuid);
     if (!me) return null;
-    const { statsComputedAt, ...computed } = computeAdvancedStatsForMatch(raw, timeline, me.championName, me.teamId);
-    return { matchId: (raw.metadata && raw.metadata.matchId) || null, ...matchRowFrom(info, me), ...computed };
+    const computed = computeAdvancedStatsForMatch(raw, timeline, me.championName, me.teamId);
+    // Stamped like saveComputedStats does: analyticsEngine.isPrecomputed needs it,
+    // or every timeline stat is recomputed from blobs a sample row doesn't have (all 0)
+    return { matchId: (raw.metadata && raw.metadata.matchId) || null, ...matchRowFrom(info, me), ...computed,
+             statsComputedAt: Date.now() };
 }
 
 // Compute advanced stats given the participant index and parsed data

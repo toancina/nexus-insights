@@ -227,3 +227,11 @@ test('statsRowFor: one player\'s matches-row columns plus the computed stats, fo
     assert.deepEqual(matchRowFrom(match.info, match.info.participants[2]).kills, 4);
     assert.equal(statsRowFor(match, timeline, 'nobody'), null);
 });
+
+test('statsRowFor rows count as precomputed, so the analytics read their stats instead of blobs they have none of', () => {
+    const { statsRowFor } = require(path.join(SRC, 'services', 'matchService.js'));
+    const row = statsRowFor(makeMatch(), makeTimeline(), 'p3');
+    // analyticsEngine.isPrecomputed: without the stamp every timeline stat (CS@10, plates,
+    // damage share…) fell back to blob parsing and came out 0 for other players (2026-11-18)
+    assert.ok(Number.isFinite(row.statsComputedAt));
+});

@@ -1006,7 +1006,7 @@ is now computed once and stored as a column:
   the sync path and the backfill path, so they can't diverge
 - `backfillComputedStats()` fills them for older rows. It runs on sync and once
   in the background at startup (`backfillAnalyticsInBackground` in renderer.js)
-- `analyticsEngine.isPrecomputed(match)` uses `dmgShare != null` as the marker.
+- `analyticsEngine.isPrecomputed(match)` uses `statsComputedAt != null` as the marker.
   Rows without it fall back to parsing the blobs, so the app is correct
   mid-migration
 - `prefetchTabJson` only loads blobs for rows that are *not* precomputed —
@@ -1616,4 +1616,21 @@ All of it only while the switch is on; off, every page is as before.
   `wpa_margin`. One system-prompt line (only while on): numbers whose margin
   includes 0 are not evidence. One game's items (`get_game_detail`) keep the
   window WPA, like the tooltips.
+- **`compare_with_players`** (2026-11-18, only registered while on): the
+  user's Solo/Duo stats on one champion next to each sample group, each value
+  with its tier, from `computeTabStats` over that group's rows (the numbers
+  Coaching shows). `area` = all (default: every Analytics category except
+  Consistency, a stat shown on two tabs listed once, count cards dropped) /
+  one category / Win chance (`winChanceStats` per group). `pools` gives games,
+  players and dates per group. Filters: champion (required), role,
+  last_n_days, last_n_patches. Real Yorick "all": ~6.8k characters. Schemas
+  with samples on: 13.4k characters (off: unchanged).
+- **Sample rows need `statsComputedAt`.** `analyticsEngine.isPrecomputed`
+  reads the stamp, not `dmgShare`; `statsRowFor` used to strip it, so every
+  timeline stat (CS@10, plates, damage share, shutdowns…) was recomputed from
+  blobs sample rows don't have and came out 0, in Coaching's comparison too.
+  `statsRowFor` now stamps rows like `saveComputedStats`. `sampleStore`
+  `STATS_VERSION` (table `sample_meta`): bump it when a stat formula changes
+  and `fillMissingStats` rebuilds every row from its blobs once (2 = this fix
+  + the impact rescore).
 

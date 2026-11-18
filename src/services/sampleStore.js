@@ -36,6 +36,13 @@ const undiv = d => (d === '' || d == null ? null : d);
 
 let schema = null;
 
+/**
+ * Version of the stats JSON in sample_rows. Bump it when a stat's formula
+ * changes, and fillMissingStats recomputes every row from its blobs once.
+ * 1 = first version; 2 = team impact rescored (2026-11-18).
+ */
+const STATS_VERSION = 2;
+
 function ensureSchema() {
     if (!schema) {
         schema = (async () => {
@@ -58,6 +65,7 @@ function ensureSchema() {
             const rowCols = (await all('PRAGMA table_info(sample_rows)')).map(c => c.name);
             if (!rowCols.includes('stats')) await run('ALTER TABLE sample_rows ADD COLUMN stats TEXT');
             await run('CREATE INDEX IF NOT EXISTS idx_sample_rows_puuid ON sample_rows (puuid)');
+            await run('CREATE TABLE IF NOT EXISTS sample_meta (key TEXT PRIMARY KEY, value TEXT)');
         })();
         schema.catch(() => { schema = null; });   // let the next call retry
     }
@@ -167,8 +175,22 @@ async function getSampleRows() {
  * Rows stored before they carried stats: compute them from the stored blobs
  * with statsOf (matchService.statsRowFor). Returns how many were filled.
  */
+async function statsVersion() {
+    const r = await get("SELECT value FROM sample_meta WHERE key = 'statsVersion'");
+    return r ? Number(r.value) || 1 : 1;
+}
+async function setStatsVersion(v) {
+    await ensureSchema();
+    await run("INSERT OR REPLACE INTO sample_meta (key, value) VALUES ('statsVersion', ?)", [String(v)]);
+}
+
 async function fillMissingStats(statsOf) {
     await ensureSchema();
+    // Stats saved under an older formula are recomputed, once
+    if (await statsVersion() < STATS_VERSION) {
+        await run('UPDATE sample_rows SET stats = NULL');
+        await setStatsVersion(STATS_VERSION);
+    }
     const missing = await all(`SELECT r.matchId, r.puuid FROM sample_rows r JOIN sample_games g USING (matchId)
         WHERE r.stats IS NULL`);
     let filled = 0;
@@ -203,4 +225,5 @@ async function prune(now = Date.now()) {
 module.exports = {
     ensureSchema, saveGame, saveSkip, knownMatchIds, storedCount,
     getPlayers, savePlayers, listFetchedAt, saveListFetched, getSampleRows, fillMissingStats, prune,
+    STATS_VERSION, _internal: { setStatsVersion },
 };
