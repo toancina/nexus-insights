@@ -41,13 +41,15 @@ function getDiffColor(val) {
     return val > 0 ? '#22c55e' : val < 0 ? '#ef4444' : '#8a8a9a';
 }
 
-/** "#2 SVP" cell; the per-area breakdown is in the hover title. */
+/** "#2 SVP" cell; the score and the per-area standing are in the hover title. */
 function renderImpactCell(impact) {
     if (!impact) return '<td class="team-cell-center">-</td>';
+    const signed = v => (v > 0 ? '+' : '') + v;
     const breakdown = IMPACT_AREAS
-        .filter(([key]) => impact.shares[key] !== null)
-        .map(([key, label]) => `${label}: ${impact.shares[key]}% of team`);
-    const title = [`Impact ${impact.score} (average share of team)`, ...breakdown].join('\n');
+        .filter(([key]) => impact.areas[key] !== undefined)
+        .map(([key, label]) => `${label}: ${signed(impact.areas[key])}`);
+    const title = [`Impact ${impact.score} / 10 (5 = average player in this game, judged against their role)`,
+                   ...breakdown, '(+ = better than the others in that role)'].join('\n');
     const tag = impact.tag
         ? `<span class="impact-tag impact-tag--${impact.tag.toLowerCase()}">${impact.tag}</span>`
         : '';

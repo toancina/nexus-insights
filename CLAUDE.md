@@ -930,25 +930,33 @@ rows and writes the links.
 - `getLpReadings` deliberately doesn't select `manual`: the renderer can read
   readings before the main process has run migration 5.
 
-### Team impact (2026-10, issue #2)
+### Team impact (2026-10, issue #2; rescored 2026-11)
 
-`services/teamImpact.js` (pure, tested): each player's share of their own
-team's total in 8 areas (kills+assists, damage, gold, vision, objective damage
-excl. structures, structure damage, heals on teammates, damage taken),
-averaged; an area with a team total of 0 is skipped. All 10 ranked (ties:
-damage, K+A, gold, vision, id); best winner = MVP, best loser = SVP.
+`services/teamImpact.js` (pure, tested): a **0–10 score** per player (5 =
+average in this game), like OP.GG's idea (their formula isn't public). Each
+of 8 areas is divided by the role's usual multiple of the game average
+(`ROLE_PAR`, measured on 526 games), turned into a z-score over the 10
+players (capped ±2.5, deaths flipped) and weighted: kills + assists 25%,
+deaths 20%, combat 20% (damage + heals + shields on allies, in HP, one
+area), gold 10%, vision 10%, objective + structure damage 10%, damage
+taken + mitigated 2.5%, CC time 2.5%. Score = 5 + 3.2 × weighted sum. All 10
+ranked (ties: damage, K+A, gold, vision, id); best winner = MVP, best
+loser = SVP.
 
+- **Why:** the first version averaged each player's share of their own team
+  in 8 equal areas, so supports (82% of team healing, 41% of vision) and
+  junglers (68% of objective damage) took 41% / 34% of MVPs and mid 5%.
+  Now 15–26% per role (an even split is 20%).
 - Stored per match through the computed-stats pipeline (`impactScore`,
-  `impactRank`, `impactTag`). The backfill also picks rows with
-  `impactRank IS NULL`, and so does `backfillAnalyticsInBackground`, so
-  existing databases index once after updating.
-- Expanded row: Impact column (`#rank` + tag, area breakdown in the title).
-  Match row: MVP/SVP tag under the result. Combat: Avg Impact Rank (lower is
-  better) and MVP/SVP Rate. Neither is benchmarked (no rank-tier data); both
-  show "--" with no impact data and fall back to prefetched rawJson for rows
-  not indexed yet.
-- Known bias: a player who is the team's only healer gets a 100% healing share
-  even for a few hundred HP, which lifts their score a lot.
+  `impactRank`, `impactTag`). Migration 9 cleared them, so the backfill
+  (`impactRank IS NULL`) rescored every game once; the Analytics cards read
+  rawJson for rows not rescored yet. Change a weight or `ROLE_PAR` → add a
+  migration like 9.
+- Expanded row: Impact column (`#rank` + tag; tooltip = score and each
+  area's standing, + = better than others in that role). Match row: MVP/SVP
+  tag under the result. Combat: Avg Impact Rank (lower is better) and
+  MVP/SVP Rate. Neither is benchmarked; both show "--" with no impact data.
+- A player with no `teamPosition` gets par 1 in every area.
 
 ### Match timeline chart (2026-10, issue #3)
 
