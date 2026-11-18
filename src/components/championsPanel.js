@@ -76,6 +76,15 @@ const COLUMNS = [
 
 const state = { sortKey: 'games', sortDir: 'desc', selected: null, role: null, openMatchup: null };
 
+// Matchups card: include other players' games (sample games). Off by default;
+// remembered per viewer. Storage can throw (private window), so it's guarded.
+const MATCHUP_SAMPLES_KEY = 'nexus.matchupsSamples';
+let matchupSamples = (() => { try { return localStorage.getItem(MATCHUP_SAMPLES_KEY) === '1'; } catch { return false; } })();
+function setMatchupSamples(on) {
+    matchupSamples = !!on;
+    try { localStorage.setItem(MATCHUP_SAMPLES_KEY, on ? '1' : '0'); } catch { /* session only */ }
+}
+
 // ---------------------------------------------------------------------------
 // Formatting
 // ---------------------------------------------------------------------------
@@ -229,9 +238,25 @@ function renderBuildOrder(matches, champion, role, pool = null) {
         </div>`;
 }
 
-function renderMatchups(d) {
+/**
+ * @param {object} d        championDetail over the games shown (yours, or the pool)
+ * @param {object} [opts]   { canMix: sample games exist for this champion, on: switch is on }
+ */
+function renderMatchups(d, { canMix = false, on = false } = {}) {
+    const toggle = canMix ? `
+        <label class="coach-switch ch-matchup-switch" title="Add other players' games on this champion (your rank and one rank up) to these numbers">
+            <input type="checkbox" data-matchup-samples ${on ? 'checked' : ''}>
+            <span class="coach-switch-track"><span class="coach-switch-thumb"></span></span>
+            <span class="coach-switch-label">Include other players' games</span>
+        </label>` : '';
+    const total = d.matchups.reduce((a, m) => a + m.games, 0);
+    const others = d.matchups.reduce((a, m) => a + m.sampleGames, 0);
+    const sub = on
+        ? `vs the lane opponent · ${others} of ${total} games are other players' · click a row for builds`
+        : 'vs your lane opponent · click a row for your builds';
+    const head = `<div class="ch-card-head"><div class="ch-card-title">Matchups <span>${escapeHtml(sub)}</span></div>${toggle}</div>`;
     if (!d.matchups.length) {
-        return `<div class="ch-card ch-card--wide"><div class="ch-card-title">Matchups</div>
+        return `<div class="ch-card ch-card--wide">${head}
             <div class="ch-empty">No lane opponents recorded yet. They're filled in while the app indexes your games.</div></div>`;
     }
     const rows = d.matchups.map(m => {
@@ -239,7 +264,7 @@ function renderMatchups(d) {
         const builds = open ? `
             <tr class="ch-matchup-detail"><td colspan="7">
                 <div class="ch-builds">
-                    <div class="ch-builds-row"><span class="ch-builds-label">Items you built</span><div class="ch-builds-items">
+                    <div class="ch-builds-row"><span class="ch-builds-label">${on ? 'Items built' : 'Items you built'}</span><div class="ch-builds-items">
                         ${m.items.slice(0, 8).map(i => `<span class="ch-build" title="${escapeHtml(itemName(i.itemId))}: ${i.wins}W ${i.games - i.wins}L">
                             ${itemIcon(i.itemId)}<span>${i.games}</span>${wrCell(i.winRate, i.games)}</span>`).join('') || '<span class="ch-empty">No finished items</span>'}</div></div>
                     <div class="ch-builds-row"><span class="ch-builds-label">Keystones</span><div class="ch-builds-items">
@@ -251,7 +276,7 @@ function renderMatchups(d) {
             <tr class="ch-matchup${open ? ' open' : ''}${m.games < LOW_SAMPLE ? ' is-low' : ''}" data-matchup="${escapeHtml(m.opponent)}">
                 <td><div class="ch-name"><span class="ch-caret">${open ? '▾' : '▸'}</span>${champIcon(m.opponent, 'ch-icon ch-icon--sm')}<span>${escapeHtml(m.opponent)}</span></div></td>
                 <td class="num">${m.games}</td>
-                <td class="num">${m.wins}–${m.losses}</td>
+                <td class="num"${m.sampleGames ? ` title="${escapeHtml(`Yours ${m.wins - m.sampleWins}–${m.losses - (m.sampleGames - m.sampleWins)} · others ${m.sampleWins}–${m.sampleGames - m.sampleWins}`)}"` : ''}>${m.wins}–${m.losses}</td>
                 <td class="num">${wrCell(m.winRate, m.games)}</td>
                 <td class="num">${num(m.kda, 2)}</td>
                 <td class="num" style="color:${m.gd15 > 0 ? 'var(--success)' : m.gd15 < 0 ? 'var(--error)' : ''}">${diff(m.gd15)}</td>
@@ -261,7 +286,7 @@ function renderMatchups(d) {
 
     return `
         <div class="ch-card ch-card--wide">
-            <div class="ch-card-title">Matchups <span>vs your lane opponent · click a row for your builds</span></div>
+            ${head}
             <table class="ch-subtable ch-matchups">
                 <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">W–L</th><th class="num">Win rate</th>
                     <th class="num">KDA</th><th class="num" title="Gold difference vs your lane opponent at 15 minutes">GD@15</th>
@@ -281,8 +306,14 @@ function renderDetail(matches) {
     const pool = samplePool(matches, d.champion, d.role);
     // Rune pages over the pool (yours + sample games) while sample games are on
     const runes = pool ? championDetail(pool.games, d.champion, { role: d.role, isCoreItem }).runes : d.runes;
-    const poolNote = pool ? `<div class="ch-note ch-pool-note">${escapeHtml(poolLabel(pool.counts, window.sampleGroupsNow || []))} · runes and build order only</div>` : '';
     const allGames = d.roles.reduce((a, r) => a + r.games, 0);
+    // Matchups: your games, or (switch on) the same pool as Rune pages / Build order
+    const canMix = !!pool && pool.counts.level + pool.counts.above > 0;
+    const mixed = canMix && matchupSamples;
+    const matchupsCard = renderMatchups(
+        mixed ? championDetail(pool.games, d.champion, { role: d.role, isCoreItem }) : d,
+        { canMix, on: mixed });
+    const poolNote = pool ? `<div class="ch-note ch-pool-note">${escapeHtml(poolLabel(pool.counts, window.sampleGroupsNow || []))} · ${mixed ? 'runes, build order and matchups' : 'runes and build order only'}</div>` : '';
 
     const roleChips = d.roles.length > 1 ? `
         <div class="ch-roles">
@@ -311,7 +342,7 @@ function renderDetail(matches) {
             ${rateTable('Core items', 'Item', d.items.slice(0, 8), i =>
                 `<div class="ch-cellrow">${itemIcon(i.itemId)}<span>${escapeHtml(itemName(i.itemId))}</span></div>`, 'No finished items')}
             ${renderBuildOrder(matches, d.champion, d.role, pool)}
-            ${renderMatchups(d)}
+            ${matchupsCard}
         </div>
         <div class="ch-note">Items are each game's final build. Win rates under ${LOW_SAMPLE} games are dimmed.</div>`;
 }
@@ -341,6 +372,11 @@ function wire() {
     const shell = document.getElementById('champions-tab');
     if (!shell || shell.dataset.wired) return;
     shell.dataset.wired = '1';
+    shell.addEventListener('change', (e) => {
+        if (!e.target.matches('[data-matchup-samples]')) return;
+        setMatchupSamples(e.target.checked);
+        render();
+    });
     shell.addEventListener('click', (e) => {
         const sampleBtn = e.target.closest('[data-sample-champ]');
         if (sampleBtn) {

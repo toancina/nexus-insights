@@ -756,6 +756,10 @@ body {
 .coach-area.is-all .coach-switch-label { color: var(--accent-primary); font-weight: 600; }
 .coach-trends-bar { display: flex; justify-content: flex-end; margin: 0 0 var(--s2); }
 .coach-switch--master .coach-switch-label { font-weight: 600; color: var(--text-primary); }
+/* Champions → Matchups: title on the left, "Include other players' games" on the right */
+.ch-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; margin-bottom: 4px; }
+.ch-card-head .ch-card-title { margin-bottom: 0; }
+.ch-matchup-switch { align-self: center; }
 .coach-switch--master input:checked ~ .coach-switch-label { color: var(--accent-primary); }
 
 /* 5. Details */
