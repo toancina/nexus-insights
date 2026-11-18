@@ -69,6 +69,24 @@ async function runMigrations() {
   await migrateRecomputePlatesAndObjectiveRate();
   await migrateUnsupportedQueues();
   await migrateAccountTags();
+  await migrateImpactScore();
+}
+
+/**
+ * Migration 9 — team impact is scored differently (role-aware 0–10 score; the
+ * old one made supports and junglers MVP in 3 games of 4). Clearing the
+ * stored score makes the background backfill (impactRank IS NULL) recompute
+ * every game; until it reaches one, the Analytics cards read its rawJson.
+ */
+async function migrateImpactScore() {
+  const done = await dbGetAsync('SELECT version FROM schema_version WHERE version = 9');
+  if (done) return;
+  const cols = (await dbAllAsync('PRAGMA table_info(matches)')).map(c => c.name);
+  if (cols.includes('impactRank')) {
+    await dbRunAsync('UPDATE matches SET impactScore = NULL, impactRank = NULL, impactTag = NULL');
+  }
+  await dbRunAsync('INSERT INTO schema_version (version, applied_at) VALUES (9, ?)', [Date.now()]);
+  console.log('Migration 9 complete — team impact will be recomputed.');
 }
 
 /**
